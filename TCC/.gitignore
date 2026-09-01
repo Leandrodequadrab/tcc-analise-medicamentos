@@ -1,0 +1,25 @@
+# Ambiente virtual
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Variáveis de ambiente / senhas
+.env
+
+# VS Code
+.vscode/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Arquivos temporários
+*.log
+
+# Dados reais da farmácia
+dados_reais/
+uploads/
