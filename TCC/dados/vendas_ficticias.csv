@@ -1,0 +1,31 @@
+data,medicamento,categoria,quantidade,cidade,prescricao
+2026-01-03,Paracetamol,Analgésico,12,São Paulo,nao
+2026-01-04,Dipirona,Analgésico,8,Campinas,nao
+2026-01-06,Ibuprofeno,Anti-inflamatório,5,Santos,sim
+2026-01-08,Loratadina,Antialérgico,4,Sorocaba,nao
+2026-01-10,Omeprazol,Gastrointestinal,7,Jundiaí,sim
+2026-01-13,Simeticona,Gastrointestinal,6,São Paulo,nao
+2026-01-16,Paracetamol,Analgésico,15,Campinas,nao
+2026-01-19,Acetilcisteína,Expectorante,3,Santos,sim
+2026-01-22,Dipirona,Analgésico,11,Sorocaba,nao
+2026-01-25,Loratadina,Antialérgico,5,Jundiaí,nao
+2026-02-01,Ibuprofeno,Anti-inflamatório,9,São Paulo,sim
+2026-02-03,Omeprazol,Gastrointestinal,6,Campinas,sim
+2026-02-05,Paracetamol,Analgésico,18,Santos,nao
+2026-02-08,Simeticona,Gastrointestinal,4,Sorocaba,nao
+2026-02-11,Dipirona,Analgésico,13,Jundiaí,nao
+2026-02-14,Loratadina,Antialérgico,7,São Paulo,nao
+2026-02-17,Acetilcisteína,Expectorante,5,Campinas,sim
+2026-02-20,Ibuprofeno,Anti-inflamatório,6,Santos,sim
+2026-02-23,Paracetamol,Analgésico,14,Sorocaba,nao
+2026-02-26,Omeprazol,Gastrointestinal,8,Jundiaí,sim
+2026-03-02,Simeticona,Gastrointestinal,5,São Paulo,nao
+2026-03-04,Dipirona,Analgésico,16,Campinas,nao
+2026-03-07,Loratadina,Antialérgico,6,Santos,nao
+2026-03-10,Ibuprofeno,Anti-inflamatório,7,Sorocaba,sim
+2026-03-13,Paracetamol,Analgésico,20,Jundiaí,nao
+2026-03-16,Acetilcisteína,Expectorante,4,São Paulo,sim
+2026-03-19,Omeprazol,Gastrointestinal,9,Campinas,sim
+2026-03-22,Dipirona,Analgésico,10,Santos,nao
+2026-03-25,Simeticona,Gastrointestinal,6,Sorocaba,nao
+2026-03-28,Loratadina,Antialérgico,8,Jundiaí,nao
