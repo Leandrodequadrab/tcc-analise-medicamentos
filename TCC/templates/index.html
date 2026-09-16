@@ -9,7 +9,25 @@
 <body>
     <main class="container">
         <h1>Sistema de Análise de Vendas de Medicamentos</h1>
-        <p>Aplicação iniciada com sucesso.</p>
+        <p>Selecione um arquivo CSV para importar os registros de vendas.</p>
+
+        {% if sucesso %}
+            <div class="mensagem sucesso" role="alert">{{ sucesso }}</div>
+        {% endif %}
+
+        {% if erro %}
+            <div class="mensagem erro" role="alert">{{ erro }}</div>
+        {% endif %}
+
+        <form action="{{ url_for('importar_csv') }}" method="post" enctype="multipart/form-data">
+            <label for="arquivo">Arquivo CSV</label>
+            <input id="arquivo" name="arquivo" type="file" accept=".csv,text/csv" required>
+            <button type="submit">Importar arquivo</button>
+        </form>
+
+        <p class="ajuda">
+            Colunas obrigatórias: data, medicamento, categoria, quantidade, cidade e prescricao.
+        </p>
     </main>
 </body>
 </html>
