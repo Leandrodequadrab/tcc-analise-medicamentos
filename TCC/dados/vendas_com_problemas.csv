@@ -1,0 +1,11 @@
+data,medicamento,categoria,quantidade,cidade,prescricao
+2026-01-03, PARACETAMOL , analgésico ,12, são paulo ,nao
+2026-01-03,paracetamol,ANALGÉSICO,12,SÃO PAULO,nao
+04/01/2026,DIPIRONA,analgésico,8,campinas,não
+31/02/2026,Ibuprofeno,Anti-inflamatório,5,Santos,sim
+2026-01-08,Loratadina,Antialérgico,abc,Sorocaba,nao
+2026-01-10,Omeprazol,Gastrointestinal,7,,sim
+2026-01-13,Simeticona,Gastrointestinal,-2,São Paulo,nao
+2026-01-19, ACETILCISTEÍNA , expectorante ,3, santos ,true
+2026-01-22,loratadina,ANTIALÉRGICO,5,jundiaí,0
+2026-01-25,Ibuprofeno,Anti-inflamatório,6,Campinas,talvez
