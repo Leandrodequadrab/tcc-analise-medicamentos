@@ -62,3 +62,8 @@ button:hover {
     color: #52606d;
     font-size: 0.9rem;
 }
+
+.link-dashboard {
+    color: #176b4d;
+    font-weight: 700;
+}

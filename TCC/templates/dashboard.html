@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Vendas</title>
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+        integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"
+        crossorigin="anonymous"
+    >
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-dark shadow-sm">
+        <div class="container">
+            <a class="navbar-brand fw-semibold" href="{{ url_for('dashboard') }}">
+                Análise de Vendas de Medicamentos
+            </a>
+            <a class="btn btn-outline-light btn-sm" href="{{ url_for('index') }}">
+                Importar CSV
+            </a>
+        </div>
+    </nav>
+
+    <main class="container py-4 py-lg-5">
+        <div class="mb-4">
+            <h1 class="h3 mb-1">Dashboard de vendas</h1>
+            <p class="text-secondary mb-0">
+                Visão geral dos registros armazenados no PostgreSQL.
+            </p>
+        </div>
+
+        {% if indicadores.total_registros == 0 %}
+            <div class="alert alert-info" role="alert">
+                Ainda não existem vendas cadastradas. Importe um CSV para alimentar o dashboard.
+            </div>
+        {% endif %}
+
+        <section class="row g-3 mb-4" aria-label="Indicadores gerais">
+            <div class="col-12 col-sm-6 col-xl-3">
+                <article class="card indicador-card h-100 border-0 shadow-sm">
+                    <div class="card-body">
+                        <p class="indicador-titulo">Registros de vendas</p>
+                        <p class="indicador-valor">{{ indicadores.total_registros }}</p>
+                    </div>
+                </article>
+            </div>
+            <div class="col-12 col-sm-6 col-xl-3">
+                <article class="card indicador-card h-100 border-0 shadow-sm">
+                    <div class="card-body">
+                        <p class="indicador-titulo">Medicamentos diferentes</p>
+                        <p class="indicador-valor">{{ indicadores.medicamentos }}</p>
+                    </div>
+                </article>
+            </div>
+            <div class="col-12 col-sm-6 col-xl-3">
+                <article class="card indicador-card h-100 border-0 shadow-sm">
+                    <div class="card-body">
+                        <p class="indicador-titulo">Categorias</p>
+                        <p class="indicador-valor">{{ indicadores.categorias }}</p>
+                    </div>
+                </article>
+            </div>
+            <div class="col-12 col-sm-6 col-xl-3">
+                <article class="card indicador-card h-100 border-0 shadow-sm">
+                    <div class="card-body">
+                        <p class="indicador-titulo">Cidades</p>
+                        <p class="indicador-valor">{{ indicadores.cidades }}</p>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="row g-4" aria-label="Gráficos de vendas">
+            <div class="col-12 col-xl-6">
+                <article class="card chart-card h-100 border-0 shadow-sm">
+                    <div class="card-body">
+                        <h2 class="h5">Medicamentos mais vendidos</h2>
+                        <p class="text-secondary small">Soma das unidades vendidas por medicamento.</p>
+                        <div class="chart-container">
+                            <canvas id="grafico-medicamentos"></canvas>
+                        </div>
+                    </div>
+                </article>
+            </div>
+            <div class="col-12 col-xl-6">
+                <article class="card chart-card h-100 border-0 shadow-sm">
+                    <div class="card-body">
+                        <h2 class="h5">Vendas por categoria</h2>
+                        <p class="text-secondary small">Soma das unidades vendidas por categoria.</p>
+                        <div class="chart-container">
+                            <canvas id="grafico-categorias"></canvas>
+                        </div>
+                    </div>
+                </article>
+            </div>
+            <div class="col-12 col-xl-6">
+                <article class="card chart-card h-100 border-0 shadow-sm">
+                    <div class="card-body">
+                        <h2 class="h5">Vendas ao longo do tempo</h2>
+                        <p class="text-secondary small">Soma das unidades vendidas em cada data.</p>
+                        <div class="chart-container">
+                            <canvas id="grafico-tempo"></canvas>
+                        </div>
+                    </div>
+                </article>
+            </div>
+            <div class="col-12 col-xl-6">
+                <article class="card chart-card h-100 border-0 shadow-sm">
+                    <div class="card-body">
+                        <h2 class="h5">Vendas por cidade</h2>
+                        <p class="text-secondary small">Soma das unidades vendidas em cada cidade.</p>
+                        <div class="chart-container">
+                            <canvas id="grafico-cidades"></canvas>
+                        </div>
+                    </div>
+                </article>
+            </div>
+        </section>
+    </main>
+
+    <script id="dashboard-data" type="application/json">{{ graficos | tojson }}</script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>

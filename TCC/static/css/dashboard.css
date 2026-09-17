@@ -1,0 +1,44 @@
+:root {
+    --verde-principal: #176b4d;
+    --verde-secundario: #2f8f68;
+    --fundo: #f4f7f6;
+    --texto-secundario: #65736d;
+}
+
+body {
+    min-height: 100vh;
+    background-color: var(--fundo);
+    color: #20302a;
+}
+
+.navbar {
+    background-color: var(--verde-principal);
+}
+
+.indicador-card,
+.chart-card {
+    border-radius: 12px;
+}
+
+.indicador-card {
+    border-left: 4px solid var(--verde-secundario) !important;
+}
+
+.indicador-titulo {
+    margin-bottom: 8px;
+    color: var(--texto-secundario);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.indicador-valor {
+    margin: 0;
+    color: var(--verde-principal);
+    font-size: 2rem;
+    font-weight: 700;
+}
+
+.chart-container {
+    position: relative;
+    height: 340px;
+}
