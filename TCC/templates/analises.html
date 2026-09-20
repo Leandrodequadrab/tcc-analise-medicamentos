@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análises Exploratórias</title>
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+        integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"
+        crossorigin="anonymous"
+    >
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/analises.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-dark shadow-sm">
+        <div class="container">
+            <a class="navbar-brand fw-semibold" href="{{ url_for('analises') }}">Análises</a>
+            <div class="d-flex gap-2">
+                <a class="btn btn-light btn-sm" href="{{ url_for('dashboard') }}">Dashboard</a>
+                <a class="btn btn-outline-light btn-sm" href="{{ url_for('index') }}">Importar CSV</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container py-4 py-lg-5">
+        <header class="mb-4">
+            <h1 class="h3 mb-1">Análise exploratória dos dados</h1>
+            <p class="text-secondary mb-0">
+                Estatísticas descritivas calculadas a partir das vendas armazenadas no PostgreSQL.
+            </p>
+        </header>
+
+        {% if resumo.total_registros == 0 %}
+            <div class="alert alert-info" role="alert">
+                Não existem dados suficientes para realizar as análises.
+            </div>
+        {% endif %}
+
+        <section class="row g-3 mb-4" aria-label="Resumo das análises">
+            <div class="col-12 col-md-6 col-xl">
+                <article class="card resumo-card h-100 border-0 shadow-sm">
+                    <div class="card-body">
+                        <p class="resumo-titulo">Registros de venda</p>
+                        <p class="resumo-valor">{{ resumo.total_registros }}</p>
+                        <small class="text-secondary">Quantidade de linhas</small>
+                    </div>
+                </article>
+            </div>
+            <div class="col-12 col-md-6 col-xl">
+                <article class="card resumo-card h-100 border-0 shadow-sm">
+                    <div class="card-body">
+                        <p class="resumo-titulo">Unidades vendidas</p>
+                        <p class="resumo-valor">{{ resumo.total_unidades }}</p>
+                        <small class="text-secondary">Soma de quantidade</small>
+                    </div>
+                </article>
+            </div>
+            <div class="col-12 col-md-6 col-xl">
+                <article class="card resumo-card h-100 border-0 shadow-sm">
+                    <div class="card-body">
+                        <p class="resumo-titulo">Maior volume</p>
+                        <p class="resumo-destaque">{{ resumo.medicamento_maior_volume.nome }}</p>
+                        <small class="text-secondary">
+                            {{ resumo.medicamento_maior_volume.unidades }} unidades
+                        </small>
+                    </div>
+                </article>
+            </div>
+            <div class="col-12 col-md-6 col-xl">
+                <article class="card resumo-card h-100 border-0 shadow-sm">
+                    <div class="card-body">
+                        <p class="resumo-titulo">Categoria com maior volume</p>
+                        <p class="resumo-destaque">{{ resumo.categoria_maior_volume.nome }}</p>
+                        <small class="text-secondary">
+                            {{ resumo.categoria_maior_volume.unidades }} unidades
+                        </small>
+                    </div>
+                </article>
+            </div>
+            <div class="col-12 col-md-6 col-xl">
+                <article class="card resumo-card h-100 border-0 shadow-sm">
+                    <div class="card-body">
+                        <p class="resumo-titulo">Média diária</p>
+                        <p class="resumo-valor">{{ resumo.media_diaria }}</p>
+                        <small class="text-secondary">Unidades por dia observado</small>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <div class="alert alert-secondary border-0" role="note">
+            Estas análises são descritivas. Uma variação elevada indica maior dispersão histórica,
+            mas não representa, por si só, anomalia, doença ou surto.
+        </div>
+
+        <section class="row g-4" aria-label="Visualizações exploratórias">
+            <div class="col-12 col-xl-6">
+                <article class="card chart-card h-100 border-0 shadow-sm">
+                    <div class="card-body">
+                        <h2 class="h5">Total de unidades por mês</h2>
+                        <p class="text-secondary small">Soma da coluna quantidade em cada mês.</p>
+                        <div class="chart-container"><canvas id="grafico-mensal"></canvas></div>
+                    </div>
+                </article>
+            </div>
+            <div class="col-12 col-xl-6">
+                <article class="card chart-card h-100 border-0 shadow-sm">
+                    <div class="card-body">
+                        <h2 class="h5">Crescimento mensal</h2>
+                        <p class="text-secondary small">Variação percentual em relação ao mês anterior.</p>
+                        <div class="chart-container"><canvas id="grafico-crescimento"></canvas></div>
+                    </div>
+                </article>
+            </div>
+            <div class="col-12 col-xl-6">
+                <article class="card chart-card h-100 border-0 shadow-sm">
+                    <div class="card-body">
+                        <h2 class="h5">Medicamentos com maior variação</h2>
+                        <p class="text-secondary small">
+                            Desvio-padrão populacional dos totais diários de unidades.
+                        </p>
+                        <div class="chart-container"><canvas id="grafico-variacao"></canvas></div>
+                    </div>
+                </article>
+            </div>
+            <div class="col-12 col-xl-6">
+                <article class="card chart-card h-100 border-0 shadow-sm">
+                    <div class="card-body">
+                        <h2 class="h5">Registros por cidade</h2>
+                        <p class="text-secondary small">Contagem de linhas, não de unidades vendidas.</p>
+                        <div class="chart-container"><canvas id="grafico-cidades"></canvas></div>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="card border-0 shadow-sm mt-4">
+            <div class="card-body">
+                <h2 class="h5">Detalhamento do crescimento mensal</h2>
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Período</th>
+                                <th>Total de unidades</th>
+                                <th>Crescimento</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in crescimento_mensal %}
+                                <tr>
+                                    <td>{{ item.periodo }}</td>
+                                    <td>{{ item.total_unidades }}</td>
+                                    <td>{{ item.exibicao }}</td>
+                                </tr>
+                            {% else %}
+                                <tr>
+                                    <td colspan="3" class="text-secondary">Sem dados disponíveis.</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script id="analises-data" type="application/json">{{ graficos | tojson }}</script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+    <script src="{{ url_for('static', filename='js/analises.js') }}"></script>
+</body>
+</html>

@@ -18,9 +18,14 @@
             <a class="navbar-brand fw-semibold" href="{{ url_for('dashboard') }}">
                 Análise de Vendas de Medicamentos
             </a>
-            <a class="btn btn-outline-light btn-sm" href="{{ url_for('index') }}">
-                Importar CSV
-            </a>
+            <div class="d-flex gap-2">
+                <a class="btn btn-light btn-sm" href="{{ url_for('analises') }}">
+                    Análises
+                </a>
+                <a class="btn btn-outline-light btn-sm" href="{{ url_for('index') }}">
+                    Importar CSV
+                </a>
+            </div>
         </div>
     </nav>
 

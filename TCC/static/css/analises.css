@@ -1,0 +1,53 @@
+:root {
+    --azul-principal: #244f73;
+    --azul-secundario: #3b789f;
+    --fundo: #f4f7fa;
+}
+
+body {
+    min-height: 100vh;
+    background-color: var(--fundo);
+    color: #20303d;
+}
+
+.navbar {
+    background-color: var(--azul-principal);
+}
+
+.resumo-card,
+.chart-card,
+main > .card {
+    border-radius: 12px;
+}
+
+.resumo-card {
+    border-top: 4px solid var(--azul-secundario) !important;
+}
+
+.resumo-titulo {
+    min-height: 42px;
+    margin-bottom: 8px;
+    color: #667784;
+    font-size: 0.86rem;
+    font-weight: 600;
+}
+
+.resumo-valor {
+    margin: 0;
+    color: var(--azul-principal);
+    font-size: 2rem;
+    font-weight: 700;
+}
+
+.resumo-destaque {
+    min-height: 48px;
+    margin: 0;
+    color: var(--azul-principal);
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+
+.chart-container {
+    position: relative;
+    height: 340px;
+}

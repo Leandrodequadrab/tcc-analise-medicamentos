@@ -7,6 +7,7 @@ from sqlalchemy import URL, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from database import db, inicializar_banco
+from utils.analises import obter_analises
 from utils.dashboard import obter_dados_dashboard
 from utils.importar_csv import ErroValidacaoCSV, importar_vendas_csv
 
@@ -51,6 +52,17 @@ def dashboard():
         "dashboard.html",
         indicadores=dados["indicadores"],
         graficos=dados["graficos"],
+    )
+
+
+@app.route("/analises")
+def analises():
+    dados = obter_analises()
+    return render_template(
+        "analises.html",
+        resumo=dados["resumo"],
+        graficos=dados["graficos"],
+        crescimento_mensal=dados["crescimento_mensal"],
     )
 
 
