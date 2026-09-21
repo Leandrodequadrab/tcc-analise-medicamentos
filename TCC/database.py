@@ -1,9 +1,17 @@
 """Configuração do SQLAlchemy e modelos do banco de dados."""
 
+import os
 from datetime import date
+from pathlib import Path
 
+from dotenv import load_dotenv
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import URL
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+PASTA_PROJETO = Path(__file__).resolve().parent
+ARQUIVO_ENV = PASTA_PROJETO / ".env"
 
 
 class Base(DeclarativeBase):
@@ -11,6 +19,33 @@ class Base(DeclarativeBase):
 
 
 db = SQLAlchemy(model_class=Base)
+
+
+def obter_url_banco_aplicacao():
+    """Monta a URL do banco do TCC usando somente variáveis de ambiente."""
+
+    load_dotenv(ARQUIVO_ENV)
+    nomes = ("DB_USER", "DB_PASSWORD", "DB_HOST", "DB_PORT", "DB_NAME")
+    ausentes = [nome for nome in nomes if not os.getenv(nome)]
+    if ausentes:
+        raise RuntimeError(
+            "Configure as seguintes variáveis no arquivo .env: "
+            + ", ".join(ausentes)
+        )
+
+    try:
+        porta = int(os.environ["DB_PORT"])
+    except ValueError as erro:
+        raise RuntimeError("DB_PORT deve ser um número inteiro.") from erro
+
+    return URL.create(
+        drivername="postgresql+psycopg",
+        username=os.environ["DB_USER"],
+        password=os.environ["DB_PASSWORD"],
+        host=os.environ["DB_HOST"],
+        port=porta,
+        database=os.environ["DB_NAME"],
+    )
 
 
 class Venda(db.Model):

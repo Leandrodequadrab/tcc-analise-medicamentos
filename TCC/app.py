@@ -1,41 +1,16 @@
-import os
-from pathlib import Path
-
-from dotenv import load_dotenv
 from flask import Flask, render_template, request
-from sqlalchemy import URL, text
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from database import db, inicializar_banco
+from database import db, inicializar_banco, obter_url_banco_aplicacao
 from utils.analises import obter_analises
 from utils.dashboard import obter_dados_dashboard
 from utils.importar_csv import ErroValidacaoCSV, importar_vendas_csv
 
 
-PASTA_PROJETO = Path(__file__).resolve().parent
-load_dotenv(PASTA_PROJETO / ".env")
-
-
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
-
-variaveis_obrigatorias = ("DB_USER", "DB_PASSWORD", "DB_HOST", "DB_PORT", "DB_NAME")
-variaveis_ausentes = [nome for nome in variaveis_obrigatorias if not os.getenv(nome)]
-
-if variaveis_ausentes:
-    raise RuntimeError(
-        "Configure as seguintes variáveis no arquivo .env: "
-        + ", ".join(variaveis_ausentes)
-    )
-
-app.config["SQLALCHEMY_DATABASE_URI"] = URL.create(
-    drivername="postgresql+psycopg",
-    username=os.getenv("DB_USER"),
-    password=os.getenv("DB_PASSWORD"),
-    host=os.getenv("DB_HOST"),
-    port=int(os.getenv("DB_PORT")),
-    database=os.getenv("DB_NAME"),
-)
+app.config["SQLALCHEMY_DATABASE_URI"] = obter_url_banco_aplicacao()
 
 inicializar_banco(app)
 

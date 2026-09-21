@@ -20,6 +20,6 @@ Thumbs.db
 # Arquivos temporários
 *.log
 
-# Dados reais da farmácia
-dados_reais/
+# Dados reais da farmácia (somente a pasta na raiz do projeto)
+/dados_reais/
 uploads/
