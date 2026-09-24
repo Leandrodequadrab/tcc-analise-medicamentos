@@ -11,9 +11,8 @@ from sqlalchemy import URL, create_engine, event, text
 
 PASTA_PROJETO = Path(__file__).resolve().parents[2]
 ARQUIVO_ENV = PASTA_PROJETO / ".env"
-VARIAVEIS_CONEXAO = (
+VARIAVEIS_OBRIGATORIAS = (
     "FARM_DB_USER",
-    "FARM_DB_PASSWORD",
     "FARM_DB_HOST",
     "FARM_DB_PORT",
     "FARM_DB_NAME",
@@ -28,7 +27,7 @@ def carregar_configuracao_farmacia():
     """Lê apenas as variáveis destinadas à conexão com o banco real."""
 
     load_dotenv(ARQUIVO_ENV)
-    ausentes = [nome for nome in VARIAVEIS_CONEXAO if not os.getenv(nome)]
+    ausentes = [nome for nome in VARIAVEIS_OBRIGATORIAS if not os.getenv(nome)]
     if ausentes:
         raise ErroConfiguracaoFarmacia(
             "Configure no .env as variáveis: " + ", ".join(ausentes)
@@ -49,7 +48,7 @@ def carregar_configuracao_farmacia():
 
     return {
         "usuario": os.environ["FARM_DB_USER"],
-        "senha": os.environ["FARM_DB_PASSWORD"],
+        "senha": os.getenv("FARM_DB_PASSWORD") or None,
         "host": os.environ["FARM_DB_HOST"],
         "porta": porta,
         "banco": nome_banco,
@@ -72,13 +71,18 @@ def criar_engine_farmacia():
     """Cria uma engine separada da aplicação e protegida contra escrita."""
 
     config = carregar_configuracao_farmacia()
+    argumentos_url = {
+        "drivername": "postgresql+psycopg2",
+        "username": config["usuario"],
+        "host": config["host"],
+        "port": config["porta"],
+        "database": config["banco"],
+    }
+    if config["senha"] is not None:
+        argumentos_url["password"] = config["senha"]
+
     url = URL.create(
-        drivername="postgresql+psycopg2",
-        username=config["usuario"],
-        password=config["senha"],
-        host=config["host"],
-        port=config["porta"],
-        database=config["banco"],
+        **argumentos_url
     )
     engine = create_engine(
         url,

@@ -20,6 +20,8 @@ Thumbs.db
 # Arquivos temporários
 *.log
 
-# Dados reais da farmácia (somente a pasta na raiz do projeto)
+# Relatórios reais da farmácia; os CSVs fictícios continuam versionáveis
+/dados/*.xls
+/dados/*.xlsx
 /dados_reais/
 uploads/
