@@ -15,6 +15,11 @@ from sqlalchemy import create_engine, event, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from database import obter_url_banco_aplicacao
+from utils.classificacao_medicamentos import (
+    CLASSIFICACOES_MED,
+    classificar_tipo_medicamento,
+    elegivel_analise_automedicacao,
+)
 
 
 BANCO_ESPERADO = "tcc_medicamentos"
@@ -63,6 +68,9 @@ SQL_SERIE_DIARIA = text(
         v.filial,
         p.codigo_produto,
         p.descricao_original,
+        p.cod_tipo,
+        p.nom_tipo,
+        p.origem_classificacao,
         v.data,
         SUM(i.quantidade) AS quantidade_total
     FROM public.itens_rel0024 AS i
@@ -72,8 +80,20 @@ SQL_SERIE_DIARIA = text(
         v.filial,
         p.codigo_produto,
         p.descricao_original,
+        p.cod_tipo,
+        p.nom_tipo,
+        p.origem_classificacao,
         v.data
     ORDER BY v.filial, p.codigo_produto, v.data
+    """
+)
+
+SQL_CATALOGO_CLASSIFICACAO = text(
+    """
+    SELECT filial, codigo_produto, descricao_original,
+           cod_tipo, nom_tipo, origem_classificacao
+    FROM public.produtos_rel0024
+    ORDER BY filial, codigo_produto
     """
 )
 
@@ -138,6 +158,7 @@ def carregar_agregacao_diaria():
                 conexao.execute(SQL_QUALIDADE_ORIGEM).mappings().one()
             )
             serie = pd.read_sql(SQL_SERIE_DIARIA, conexao)
+            catalogo = pd.read_sql(SQL_CATALOGO_CLASSIFICACAO, conexao)
     finally:
         engine.dispose()
 
@@ -148,12 +169,20 @@ def carregar_agregacao_diaria():
     serie["quantidade_total"] = pd.to_numeric(
         serie["quantidade_total"], errors="coerce"
     )
+    for quadro in (serie, catalogo):
+        quadro["classificacao_operacional"] = quadro["nom_tipo"].map(
+            classificar_tipo_medicamento
+        )
+        quadro["elegivel_analise_automedicacao"] = quadro[
+            "classificacao_operacional"
+        ].map(elegivel_analise_automedicacao)
     return {
         "banco": banco,
         "somente_leitura": somente_leitura,
         "resumo_banco": resumo,
         "qualidade_origem": qualidade,
         "serie_vendas": serie,
+        "catalogo_classificado": catalogo,
     }
 
 
@@ -174,6 +203,11 @@ def construir_calendario_completo(serie_vendas, resumo_produtos):
             "filial",
             "codigo_produto",
             "descricao_original",
+            "cod_tipo",
+            "nom_tipo",
+            "origem_classificacao",
+            "classificacao_operacional",
+            "elegivel_analise_automedicacao",
             "primeira_venda",
             "ultima_venda",
         ]
@@ -186,7 +220,17 @@ def construir_calendario_completo(serie_vendas, resumo_produtos):
     ]
     serie_completa = calendario.merge(
         serie_vendas,
-        on=["filial", "codigo_produto", "descricao_original", "data"],
+        on=[
+            "filial",
+            "codigo_produto",
+            "descricao_original",
+            "cod_tipo",
+            "nom_tipo",
+            "origem_classificacao",
+            "classificacao_operacional",
+            "elegivel_analise_automedicacao",
+            "data",
+        ],
         how="left",
         validate="one_to_one",
     )
@@ -223,11 +267,29 @@ def _distribuicao_dias_venda(resumo_produtos):
     )
 
 
-def diagnosticar_series():
+def diagnosticar_series(apenas_elegiveis_automedicacao=False):
     """Compara as séries A e B e retorna métricas sem treinar ML."""
 
     dados = carregar_agregacao_diaria()
-    serie_a = dados["serie_vendas"]
+    serie_completa_origem = dados["serie_vendas"]
+    soma_agregada_origem = float(
+        serie_completa_origem["quantidade_total"].sum()
+    )
+    soma_origem = float(dados["resumo_banco"]["soma_quantidades"])
+    if not np.isclose(soma_agregada_origem, soma_origem):
+        raise ErroDiagnostico(
+            "A soma da serie diaria diverge da soma dos itens importados."
+        )
+
+    serie_a = serie_completa_origem
+    if apenas_elegiveis_automedicacao:
+        serie_a = serie_a.loc[
+            serie_a["elegivel_analise_automedicacao"]
+        ].copy()
+        if serie_a.empty:
+            raise ErroDiagnostico(
+                "Nenhum produto elegivel para a analise operacional foi encontrado."
+            )
     chaves = ["filial", "codigo_produto"]
 
     duplicidades = int(serie_a.duplicated(chaves + ["data"]).sum())
@@ -242,6 +304,13 @@ def diagnosticar_series():
         serie_a.groupby(chaves, as_index=False)
         .agg(
             descricao_original=("descricao_original", "first"),
+            cod_tipo=("cod_tipo", "first"),
+            nom_tipo=("nom_tipo", "first"),
+            origem_classificacao=("origem_classificacao", "first"),
+            classificacao_operacional=("classificacao_operacional", "first"),
+            elegivel_analise_automedicacao=(
+                "elegivel_analise_automedicacao", "first"
+            ),
             primeira_venda=("data", "min"),
             ultima_venda=("data", "max"),
             dias_com_venda=("data", "nunique"),
@@ -267,13 +336,6 @@ def diagnosticar_series():
         raise ErroDiagnostico(
             "A quantidade de zeros adicionados diverge dos dias sem venda."
         )
-    soma_agregada = float(serie_a["quantidade_total"].sum())
-    soma_origem = float(dados["resumo_banco"]["soma_quantidades"])
-    if not np.isclose(soma_agregada, soma_origem):
-        raise ErroDiagnostico(
-            "A soma da série diária diverge da soma dos itens importados."
-        )
-
     data_inicial = serie_a["data"].min()
     data_final = serie_a["data"].max()
     dias_periodo = int((data_final - data_inicial).days + 1)
@@ -303,11 +365,34 @@ def diagnosticar_series():
         ["dias_com_venda", "quantidade_total"], ascending=[True, False]
     ).head(10)[colunas_exibicao]
 
+    catalogo = dados["catalogo_classificado"]
+    contagens_classificacao = {
+        str(chave): int(valor)
+        for chave, valor in catalogo["classificacao_operacional"]
+        .value_counts(dropna=False)
+        .items()
+    }
+    produtos_med = int(
+        catalogo["classificacao_operacional"].isin(CLASSIFICACOES_MED).sum()
+    )
+    produtos_elegiveis = int(
+        catalogo["elegivel_analise_automedicacao"].sum()
+    )
+
     return {
         **dados,
         "serie_a": serie_a,
         "serie_b": serie_b,
         "resumo_produtos": resumo_produtos,
+        "universo_operacional": {
+            "filtro_aplicado": bool(apenas_elegiveis_automedicacao),
+            "produtos_catalogo": len(catalogo),
+            "produtos_med": produtos_med,
+            "produtos_nao_med": len(catalogo) - produtos_med,
+            "produtos_elegiveis": produtos_elegiveis,
+            "produtos_excluidos": len(catalogo) - produtos_elegiveis,
+            "contagens_classificacao": contagens_classificacao,
+        },
         "periodo": {
             "data_inicial": data_inicial.date(),
             "data_final": data_final.date(),

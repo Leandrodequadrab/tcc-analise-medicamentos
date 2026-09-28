@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análise de Aumentos Atípicos</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/analise_ia.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-dark shadow-sm">
+        <div class="container">
+            <a class="navbar-brand fw-semibold" href="{{ url_for('analise_ia') }}">Análise por IA</a>
+            <div class="d-flex gap-2">
+                <a class="btn btn-light btn-sm" href="{{ url_for('dashboard') }}">Dashboard</a>
+                <a class="btn btn-outline-light btn-sm" href="{{ url_for('analises') }}">Análises</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container py-4 py-lg-5">
+        <header class="page-header mb-4">
+            <span class="section-kicker">Isolation Forest · Modelo C</span>
+            <h1 class="display-6 fw-bold mb-2">Análise de Aumentos Atípicos</h1>
+            <p class="text-secondary mb-0">Identificação de comportamentos atípicos nas quantidades diárias vendidas, comparando cada produto com seu próprio histórico.</p>
+        </header>
+
+        <section class="card filter-card border-0 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+                    <div><h2 class="h5 mb-1">Filtros da análise</h2><p class="text-secondary small mb-0">Todos os campos são opcionais.</p></div>
+                    <span class="badge rounded-pill text-bg-light border">Cálculo sob demanda</span>
+                </div>
+                <form id="form-analise-ia" method="get" action="{{ url_for('analise_ia') }}" class="row g-3 align-items-end">
+                    <div class="col-12 col-md-3 col-xl-2">
+                        <label class="form-label" for="filial">Filial</label>
+                        {% if dados %}
+                            <select class="form-select" id="filial" name="filial">
+                                <option value="">Todas</option>
+                                {% for filial in dados.filiais_disponiveis %}<option value="{{ filial }}" {% if filtros.filial == filial %}selected{% endif %}>Filial {{ filial }}</option>{% endfor %}
+                            </select>
+                        {% else %}
+                            <input class="form-control" id="filial" name="filial" type="number" min="0" value="{{ filtros.filial or '' }}">
+                        {% endif %}
+                    </div>
+                    <div class="col-12 col-md-9 col-xl-4">
+                        <label class="form-label" for="produto">Produto</label>
+                        <input class="form-control" id="produto" name="produto" type="number" min="0" list="lista-produtos" value="{{ filtros.codigo_produto or '' }}" placeholder="Digite ou selecione o código">
+                        {% if dados %}
+                            <datalist id="lista-produtos">
+                                {% for produto in dados.produtos_disponiveis %}<option value="{{ produto.codigo }}">{{ produto.descricao }} · Filial {{ produto.filial }}</option>{% endfor %}
+                            </datalist>
+                        {% endif %}
+                        <div class="form-text">A lista apresenta código e descrição.</div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-xl-2">
+                        <label class="form-label" for="data_inicial">Data inicial</label>
+                        <input class="form-control" id="data_inicial" name="data_inicial" type="date" value="{{ filtros.data_inicial or '' }}">
+                    </div>
+                    <div class="col-12 col-sm-6 col-xl-2">
+                        <label class="form-label" for="data_final">Data final</label>
+                        <input class="form-control" id="data_final" name="data_final" type="date" value="{{ filtros.data_final or '' }}">
+                    </div>
+                    <div class="col-12 col-xl-2 d-grid gap-2">
+                        <button id="botao-analisar" class="btn btn-primary" type="submit">Analisar</button>
+                        <a class="btn btn-outline-secondary" data-executa-analise href="{{ url_for('analise_ia') }}">Limpar filtros</a>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <div class="history-note alert border-0 mb-3" role="note"><strong>Universo operacional:</strong> a análise considera produtos dos tipos internos MED, com exclusão de MED CONTROLADO. Essa seleção cadastral não comprova MIP, venda sem prescrição nem automedicação.</div>
+        <div class="history-note alert border-0 mb-4" role="note"><strong>Contexto temporal preservado:</strong> o histórico completo do universo elegível é calculado antes de limitar o período exibido. Datas anteriores continuam disponíveis para formar as referências do modelo.</div>
+
+        {% if erro %}
+            <div class="alert {{ 'alert-warning' if status_erro == 422 else 'alert-danger' }}" role="alert">
+                <strong>{{ 'Produto fora do escopo ou histórico insuficiente' if status_erro == 422 else 'Não foi possível concluir a análise' }}</strong>
+                <div>{{ erro }}</div>
+            </div>
+        {% endif %}
+
+        {% if dados %}
+            <section class="row g-3 mb-4" aria-label="Resumo da análise por IA">
+                <div class="col-6 col-lg-4 col-xl-2"><article class="card metric-card h-100 border-0 shadow-sm"><div class="card-body"><p class="metric-label">Produtos analisáveis</p><p class="metric-value">{{ dados.metricas.produtos_modelaveis }}</p></div></article></div>
+                <div class="col-6 col-lg-4 col-xl-2"><article class="card metric-card metric-neutral h-100 border-0 shadow-sm"><div class="card-body"><p class="metric-label">Histórico insuficiente</p><p class="metric-value">{{ dados.metricas.produtos_historico_insuficiente }}</p></div></article></div>
+                <div class="col-6 col-lg-4 col-xl-2"><article class="card metric-card h-100 border-0 shadow-sm"><div class="card-body"><p class="metric-label">Observações avaliadas</p><p class="metric-value">{{ dados.metricas.observacoes_avaliadas }}</p></div></article></div>
+                <div class="col-6 col-lg-4 col-xl-2"><article class="card metric-card metric-warning h-100 border-0 shadow-sm"><div class="card-body"><p class="metric-label">Outliers gerais</p><p class="metric-value">{{ dados.metricas.outliers }}</p><small class="text-secondary">Inclui altas e quedas</small></div></article></div>
+                <div class="col-6 col-lg-4 col-xl-2"><article class="card metric-card metric-danger h-100 border-0 shadow-sm"><div class="card-body"><p class="metric-label">Aumentos atípicos</p><p class="metric-value">{{ dados.metricas.aumentos_atipicos }}</p><small class="text-secondary">Outlier acima da referência</small></div></article></div>
+                <div class="col-6 col-lg-4 col-xl-2"><article class="card metric-card metric-period h-100 border-0 shadow-sm"><div class="card-body"><p class="metric-label">Período apresentado</p><p class="period-value">{{ dados.metricas.periodo_analisado.data_inicial }}</p><small class="text-secondary">até {{ dados.metricas.periodo_analisado.data_final }}</small></div></article></div>
+            </section>
+            <p class="text-secondary small mb-4">Catálogo: {{ dados.metricas.produtos_catalogo }} produtos · MED: {{ dados.metricas.produtos_med }} · elegíveis no escopo operacional: {{ dados.metricas.produtos_elegiveis }} · excluídos: {{ dados.metricas.produtos_excluidos }}.</p>
+
+            <section class="card content-card border-0 shadow-sm mb-4"><div class="card-body p-4">
+                <div class="d-flex flex-wrap justify-content-between gap-2 mb-3">
+                    <div><h2 class="h5 mb-1">Série temporal diária</h2><p class="text-secondary small mb-0">{{ dados.grafico_temporal.titulo if dados.grafico_temporal.disponivel else 'Visualização individual por produto.' }}</p></div>
+                    <div class="chart-legend small" aria-label="Legenda do gráfico"><span><i class="legend-line observed"></i>Quantidade</span><span><i class="legend-line reference"></i>Referência histórica</span><span><i class="legend-dot"></i>Aumento atípico</span></div>
+                </div>
+                {% if dados.grafico_temporal.disponivel %}
+                    <div class="ia-chart-container"><canvas id="grafico-serie-produto"></canvas></div>
+                    <script id="analise-ia-data" type="application/json">{{ dados.grafico_temporal | tojson }}</script>
+                {% else %}
+                    <div class="empty-chart text-center py-5 px-3"><div class="empty-chart-icon" aria-hidden="true">↗</div><p class="fw-semibold mb-1">Série temporal não exibida</p><p class="text-secondary mb-0">{{ dados.grafico_temporal.mensagem }}</p></div>
+                {% endif %}
+            </div></section>
+
+            <section class="card content-card border-0 shadow-sm mb-4"><div class="card-body p-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+                    <div><h2 class="h5 mb-1">Aumentos atípicos encontrados</h2><p class="text-secondary small mb-0">Ordenação pelo menor índice de decisão, seguindo a prioridade atual do pipeline.</p></div>
+                    <span class="badge rounded-pill text-bg-danger">{{ dados.total_resultados_filtrados }} ocorrências</span>
+                </div>
+                {% if dados.resultados_limitados %}<div class="alert alert-light border small py-2" role="status">Exibindo os {{ dados.limite_exibicao }} resultados mais relevantes de {{ dados.total_resultados_filtrados }}.</div>{% endif %}
+                <div class="table-responsive"><table class="table table-hover align-middle mb-0">
+                    <thead><tr><th>Data</th><th>Filial</th><th>Código</th><th>Produto</th><th class="text-end">Quantidade</th><th class="text-end">Referência</th><th class="text-end">Diferença</th><th class="text-end">Relação</th><th class="text-end">Índice de decisão</th><th>Classificação</th></tr></thead>
+                    <tbody>
+                        {% for item in dados.resultados %}
+                            <tr><td class="text-nowrap">{{ item.data }}</td><td>{{ item.filial }}</td><td>{{ item.codigo_produto }}</td><td class="product-name">{{ item.descricao }}</td><td class="text-end">{{ '%.2f'|format(item.quantidade_diaria) }}</td><td class="text-end">{{ '%.2f'|format(item.referencia_historica) }}</td><td class="text-end text-danger fw-semibold">+{{ '%.2f'|format(item.diferenca_historica) }}</td><td class="text-end">{{ '%.2f'|format(item.razao_historica) }}×</td><td class="text-end"><span class="decision-value">{{ '%.4f'|format(item.decision_function) }}</span></td><td><span class="badge classification-badge">Aumento atípico</span></td></tr>
+                        {% else %}<tr><td colspan="10" class="text-center text-secondary py-4">Nenhum aumento atípico nos filtros selecionados.</td></tr>{% endfor %}
+                    </tbody>
+                </table></div>
+                <p class="text-secondary small mt-3 mb-0">Índice de decisão negativo indica classificação como outlier. Esse valor não é uma probabilidade.</p>
+            </div></section>
+
+            <section class="card explanation-card border-0 shadow-sm"><div class="card-body p-4">
+                <h2 class="h5">Como interpretar</h2>
+                <p><strong>Aumento atípico</strong> significa que a quantidade diária vendida apresentou comportamento diferente do histórico daquele produto segundo o modelo.</p>
+                <ul class="mb-0"><li>É um sinal para análise posterior, não um diagnóstico.</li><li>Não comprova automedicação.</li><li>Promoções, estoque, preço e sazonalidade podem influenciar as vendas.</li></ul>
+            </div></section>
+        {% endif %}
+    </main>
+
+    <div id="loading-analise" class="loading-overlay" aria-hidden="true"><div class="loading-card text-center shadow"><div class="spinner-border text-success mb-3" role="status"><span class="visually-hidden">Carregando</span></div><p class="fw-semibold mb-1">Executando análise...</p><p class="text-secondary small mb-0">O processamento pode levar alguns segundos.</p></div></div>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+    <script src="{{ url_for('static', filename='js/analise_ia.js') }}"></script>
+</body>
+</html>

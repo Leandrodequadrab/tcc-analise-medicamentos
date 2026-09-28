@@ -20,9 +20,11 @@ from .comparar_modelos_relativos import (
     _metricas_modelo,
     _top_20,
     _verificar_reprodutibilidade,
+    adicionar_features_relativas,
     executar_comparacao,
 )
-from .diagnosticar_series import ErroDiagnostico
+from .detectar_anomalias import preparar_observacoes_modelo
+from .diagnosticar_series import ErroDiagnostico, diagnosticar_series
 
 
 MINIMO_VENDAS_POSITIVAS_MODELO_C = 7
@@ -48,10 +50,10 @@ FEATURES_INTERPRETACAO_C = (
 )
 
 
-def _adicionar_historico_positivo(comparacao):
-    """Calcula estatísticas anteriores de vendas positivas sem vazamento."""
+def calcular_historico_positivo(serie_features):
+    """Expõe o contexto positivo anterior usado pelo Modelo C."""
 
-    serie = comparacao["preparo"]["serie_features"].copy().sort_values(
+    serie = serie_features.copy().sort_values(
         ["filial", "codigo_produto", "data"], kind="stable"
     )
     chaves = [serie["filial"], serie["codigo_produto"]]
@@ -83,6 +85,16 @@ def _adicionar_historico_positivo(comparacao):
         serie["taxa_recente_anterior_28d"]
         - serie["taxa_historica_dias_com_venda"]
     )
+    return serie
+
+
+def _adicionar_historico_positivo(comparacao, serie_historica=None):
+    """Anexa às observações as estatísticas positivas calculadas no passado."""
+
+    if serie_historica is None:
+        serie_historica = calcular_historico_positivo(
+            comparacao["preparo"]["serie_features"]
+        )
 
     campos = [
         "filial",
@@ -95,7 +107,7 @@ def _adicionar_historico_positivo(comparacao):
         "diferenca_taxa_recente_historica",
     ]
     observacoes = comparacao["resultado_b"].merge(
-        serie[campos],
+        serie_historica[campos],
         on=["filial", "codigo_produto", "data"],
         how="left",
         validate="one_to_one",
@@ -184,6 +196,39 @@ def treinar_modelo_c(observacoes):
         )
     )
     return modelo, resultado
+
+
+def executar_modelo_c(apenas_elegiveis_automedicacao=False):
+    """Executa diretamente o Modelo C congelado para reutilização pela aplicação.
+
+    O caminho direto evita treinar os baselines A e B. A agregação, o calendário,
+    as features temporais, a elegibilidade e os parâmetros permanecem os mesmos.
+    """
+
+    diagnostico = diagnosticar_series(
+        apenas_elegiveis_automedicacao=apenas_elegiveis_automedicacao
+    )
+    preparo = preparar_observacoes_modelo(diagnostico)
+    observacoes_relativas, _diagnostico_mad = adicionar_features_relativas(
+        preparo
+    )
+    serie_contexto = calcular_historico_positivo(preparo["serie_features"])
+    observacoes_historicas = _adicionar_historico_positivo(
+        {
+            "preparo": preparo,
+            "resultado_b": observacoes_relativas,
+        },
+        serie_historica=serie_contexto,
+    )
+    observacoes_c = preparar_modelo_c(observacoes_historicas)
+    modelo, resultado = treinar_modelo_c(observacoes_c)
+    return {
+        "diagnostico": diagnostico,
+        "preparo": preparo,
+        "modelo": modelo,
+        "resultado": resultado,
+        "serie_contexto": serie_contexto,
+    }
 
 
 def _produtos_acompanhados(tres_resultados):

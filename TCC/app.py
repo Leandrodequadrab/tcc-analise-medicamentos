@@ -6,6 +6,9 @@ from database import db, inicializar_banco, obter_url_banco_aplicacao
 from utils.analises import obter_analises
 from utils.dashboard import obter_dados_dashboard
 from utils.importar_csv import ErroValidacaoCSV, importar_vendas_csv
+from utils.ml.comparar_modelos_relativos import ErroModelo
+from utils.ml.diagnosticar_series import ErroDiagnostico
+from utils.ml.servico_modelo_c import ErroAnaliseIA, executar_analise_ia
 
 
 app = Flask(__name__)
@@ -38,6 +41,45 @@ def analises():
         resumo=dados["resumo"],
         graficos=dados["graficos"],
         crescimento_mensal=dados["crescimento_mensal"],
+    )
+
+
+@app.route("/analise-ia")
+def analise_ia():
+    filtros = {
+        "filial": request.args.get("filial", ""),
+        "codigo_produto": request.args.get("produto", ""),
+        "data_inicial": request.args.get("data_inicial", ""),
+        "data_final": request.args.get("data_final", ""),
+    }
+    try:
+        dados = executar_analise_ia(**filtros)
+    except ErroAnaliseIA as erro:
+        return render_template(
+            "analise_ia.html",
+            dados=None,
+            filtros=filtros,
+            erro=str(erro),
+            status_erro=erro.status_http,
+        ), erro.status_http
+    except (ErroDiagnostico, ErroModelo, SQLAlchemyError):
+        return render_template(
+            "analise_ia.html",
+            dados=None,
+            filtros=filtros,
+            erro=(
+                "Não foi possível executar a análise. Verifique a conexão "
+                "e a disponibilidade dos dados Rel_0024."
+            ),
+            status_erro=503,
+        ), 503
+
+    return render_template(
+        "analise_ia.html",
+        dados=dados,
+        filtros=dados["filtros"],
+        erro=None,
+        status_erro=None,
     )
 
 

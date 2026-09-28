@@ -44,6 +44,11 @@ class ProdutoRel0024(db.Model):
     filial: Mapped[int] = mapped_column(nullable=False)
     codigo_produto: Mapped[int] = mapped_column(nullable=False)
     descricao_original: Mapped[str] = mapped_column(db.String(255), nullable=False)
+    cod_tipo: Mapped[int | None] = mapped_column(nullable=True)
+    nom_tipo: Mapped[str | None] = mapped_column(db.String(100), nullable=True)
+    origem_classificacao: Mapped[str | None] = mapped_column(
+        db.String(100), nullable=True
+    )
 
     itens: Mapped[list["ItemRel0024"]] = relationship(back_populates="produto")
 
