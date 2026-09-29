@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from flask import Flask, render_template, request
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -6,13 +8,20 @@ from database import db, inicializar_banco, obter_url_banco_aplicacao
 from utils.analises import obter_analises
 from utils.dashboard import obter_dados_dashboard
 from utils.importar_csv import ErroValidacaoCSV, importar_vendas_csv
+from utils.dados_reais.importar_rel0024 import ErroImportacaoRel0024
+from utils.dados_reais.servico_upload_rel0024 import (
+    preparar_resultado_web,
+    processar_upload_rel0024,
+)
+from utils.dados_reais.validar_rel0024 import ErroRel0024
 from utils.ml.comparar_modelos_relativos import ErroModelo
 from utils.ml.diagnosticar_series import ErroDiagnostico
 from utils.ml.servico_modelo_c import ErroAnaliseIA, executar_analise_ia
 
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
+app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
+app.config["UPLOAD_FOLDER"] = str(Path(__file__).resolve().parent / "uploads")
 app.config["SQLALCHEMY_DATABASE_URI"] = obter_url_banco_aplicacao()
 
 inicializar_banco(app)
@@ -118,10 +127,62 @@ def importar_csv():
     )
 
 
+@app.route("/importar-rel0024", methods=["GET", "POST"])
+def importar_rel0024_web():
+    if request.method == "GET":
+        return render_template(
+            "importar_rel0024.html", resultado=None, erro=None
+        )
+
+    arquivo = request.files.get("arquivo")
+    try:
+        relatorio = processar_upload_rel0024(
+            arquivo, app.config["UPLOAD_FOLDER"]
+        )
+        resultado = preparar_resultado_web(relatorio)
+    except ErroRel0024 as erro:
+        return render_template(
+            "importar_rel0024.html", resultado=None, erro=str(erro)
+        ), 400
+    except ErroImportacaoRel0024 as erro:
+        return render_template(
+            "importar_rel0024.html", resultado=None, erro=str(erro)
+        ), 409
+    except (SQLAlchemyError, OSError):
+        return render_template(
+            "importar_rel0024.html",
+            resultado=None,
+            erro=(
+                "Não foi possível concluir a importação. Nenhum dado parcial "
+                "foi confirmado; verifique o arquivo e a conexão com o banco."
+            ),
+        ), 500
+    except Exception:
+        app.logger.exception("Falha interna no upload Rel_0024")
+        return render_template(
+            "importar_rel0024.html",
+            resultado=None,
+            erro=(
+                "O arquivo não pôde ser processado com segurança. Nenhum "
+                "dado parcial foi confirmado."
+            ),
+        ), 500
+
+    return render_template(
+        "importar_rel0024.html", resultado=resultado, erro=None
+    )
+
+
 @app.errorhandler(413)
 def arquivo_muito_grande(_erro):
+    if request.path.startswith("/importar-rel0024"):
+        return render_template(
+            "importar_rel0024.html",
+            resultado=None,
+            erro="O arquivo ultrapassa o limite permitido de 50 MB.",
+        ), 413
     return render_template(
-        "index.html", erro="O arquivo ultrapassa o limite de 5 MB."
+        "index.html", erro="O arquivo ultrapassa o limite de 50 MB."
     ), 413
 
 

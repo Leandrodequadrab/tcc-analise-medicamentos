@@ -28,8 +28,90 @@ class ImportacaoRel0024(db.Model):
     soma_quantidades: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
     soma_valores: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     registros_invalidos: Mapped[int] = mapped_column(nullable=False)
+    quantidade_linhas_lidas: Mapped[int] = mapped_column(
+        nullable=False, server_default="0"
+    )
+    quantidade_linhas_nao_venda: Mapped[int] = mapped_column(
+        nullable=False, server_default="0"
+    )
+    quantidade_linhas_venda: Mapped[int] = mapped_column(
+        nullable=False, server_default="0"
+    )
+    quantidade_linhas_devolucao: Mapped[int] = mapped_column(
+        nullable=False, server_default="0"
+    )
+    soma_quantidades_devolucao: Mapped[Decimal] = mapped_column(
+        Numeric(16, 4), nullable=False, server_default="0"
+    )
+    soma_valores_devolucao: Mapped[Decimal] = mapped_column(
+        Numeric(18, 2), nullable=False, server_default="0"
+    )
+    soma_quantidades_liquida: Mapped[Decimal] = mapped_column(
+        Numeric(16, 4), nullable=False, server_default="0"
+    )
+    soma_valores_liquido: Mapped[Decimal] = mapped_column(
+        Numeric(18, 2), nullable=False, server_default="0"
+    )
+    produtos_inseridos: Mapped[int] = mapped_column(
+        nullable=False, server_default="0"
+    )
+    produtos_existentes: Mapped[int] = mapped_column(
+        nullable=False, server_default="0"
+    )
+    vendas_inseridas: Mapped[int] = mapped_column(
+        nullable=False, server_default="0"
+    )
+    vendas_existentes: Mapped[int] = mapped_column(
+        nullable=False, server_default="0"
+    )
+    itens_existentes: Mapped[int] = mapped_column(
+        nullable=False, server_default="0"
+    )
+    soma_quantidades_inseridas: Mapped[Decimal] = mapped_column(
+        Numeric(16, 4), nullable=False, server_default="0"
+    )
+    quantidade_conflitos: Mapped[int] = mapped_column(
+        nullable=False, server_default="0"
+    )
+    quantidade_divergencias_descricao: Mapped[int] = mapped_column(
+        nullable=False, server_default="0"
+    )
+    tempo_processamento_segundos: Mapped[Decimal] = mapped_column(
+        Numeric(12, 3), nullable=False, server_default="0"
+    )
 
     itens: Mapped[list["ItemRel0024"]] = relationship(back_populates="importacao")
+    divergencias_descricao: Mapped[list["DivergenciaDescricaoRel0024"]] = (
+        relationship(back_populates="importacao")
+    )
+
+
+class DivergenciaDescricaoRel0024(db.Model):
+    __tablename__ = "divergencias_descricao_rel0024"
+    __table_args__ = (
+        UniqueConstraint(
+            "importacao_id",
+            "filial",
+            "codigo_produto",
+            name="uq_divergencias_rel0024_importacao_produto",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    importacao_id: Mapped[int] = mapped_column(
+        ForeignKey("importacoes_rel0024.id"), nullable=False, index=True
+    )
+    filial: Mapped[int] = mapped_column(nullable=False)
+    codigo_produto: Mapped[int] = mapped_column(nullable=False)
+    descricao_banco: Mapped[str] = mapped_column(db.String(255), nullable=False)
+    descricao_arquivo: Mapped[str] = mapped_column(db.String(255), nullable=False)
+    registrada_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    importacao: Mapped[ImportacaoRel0024] = relationship(
+        back_populates="divergencias_descricao"
+    )
 
 
 class ProdutoRel0024(db.Model):
@@ -118,6 +200,7 @@ class ItemRel0024(db.Model):
 
 TABELAS_REL0024 = (
     ImportacaoRel0024.__table__,
+    DivergenciaDescricaoRel0024.__table__,
     ProdutoRel0024.__table__,
     VendaRel0024.__table__,
     ItemRel0024.__table__,

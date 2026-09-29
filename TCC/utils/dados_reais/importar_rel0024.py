@@ -1,6 +1,7 @@
 """Importador transacional e idempotente do relatório oficial Rel_0024."""
 
 import argparse
+from collections import Counter, defaultdict
 from pathlib import Path
 import time
 
@@ -9,6 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from database import obter_url_banco_aplicacao
 from models.rel0024 import (
+    DivergenciaDescricaoRel0024,
     ImportacaoRel0024,
     ItemRel0024,
     ProdutoRel0024,
@@ -17,12 +19,37 @@ from models.rel0024 import (
 )
 
 from .conexao_farmacia import PASTA_PROJETO
-from .validar_rel0024 import ErroRel0024, ler_rel0024, validar_rel0024
+from .validar_rel0024 import (
+    ErroRel0024,
+    calcular_hash_rel0024,
+    ler_rel0024,
+    validar_rel0024,
+)
 
 
 ARQUIVO_PADRAO = PASTA_PROJETO / "dados" / "6 meses.xlsx"
 BANCO_DESTINO = "tcc_medicamentos"
 TAMANHO_LOTE = 1000
+
+COLUNAS_AUDITORIA = {
+    "quantidade_linhas_lidas": "INTEGER NOT NULL DEFAULT 0",
+    "quantidade_linhas_nao_venda": "INTEGER NOT NULL DEFAULT 0",
+    "quantidade_linhas_venda": "INTEGER NOT NULL DEFAULT 0",
+    "quantidade_linhas_devolucao": "INTEGER NOT NULL DEFAULT 0",
+    "soma_quantidades_devolucao": "NUMERIC(16, 4) NOT NULL DEFAULT 0",
+    "soma_valores_devolucao": "NUMERIC(18, 2) NOT NULL DEFAULT 0",
+    "soma_quantidades_liquida": "NUMERIC(16, 4) NOT NULL DEFAULT 0",
+    "soma_valores_liquido": "NUMERIC(18, 2) NOT NULL DEFAULT 0",
+    "produtos_inseridos": "INTEGER NOT NULL DEFAULT 0",
+    "produtos_existentes": "INTEGER NOT NULL DEFAULT 0",
+    "vendas_inseridas": "INTEGER NOT NULL DEFAULT 0",
+    "vendas_existentes": "INTEGER NOT NULL DEFAULT 0",
+    "itens_existentes": "INTEGER NOT NULL DEFAULT 0",
+    "soma_quantidades_inseridas": "NUMERIC(16, 4) NOT NULL DEFAULT 0",
+    "quantidade_conflitos": "INTEGER NOT NULL DEFAULT 0",
+    "quantidade_divergencias_descricao": "INTEGER NOT NULL DEFAULT 0",
+    "tempo_processamento_segundos": "NUMERIC(12, 3) NOT NULL DEFAULT 0",
+}
 
 
 class ErroImportacaoRel0024(RuntimeError):
@@ -57,6 +84,53 @@ def _criar_estrutura(engine):
         raise ErroImportacaoRel0024(
             "Tabelas Rel_0024 ausentes: " + ", ".join(sorted(ausentes))
         )
+    colunas_atuais = {
+        coluna["name"]
+        for coluna in inspetor.get_columns("importacoes_rel0024")
+    }
+    colunas_ausentes = {
+        nome: definicao
+        for nome, definicao in COLUNAS_AUDITORIA.items()
+        if nome not in colunas_atuais
+    }
+    if colunas_ausentes:
+        with engine.begin() as conexao:
+            _confirmar_destino(conexao)
+            for nome, definicao in colunas_ausentes.items():
+                conexao.execute(text(
+                    "ALTER TABLE public.importacoes_rel0024 "
+                    f"ADD COLUMN IF NOT EXISTS {nome} {definicao}"
+                ))
+            if "produtos_inseridos" in colunas_ausentes:
+                conexao.execute(text(
+                    "UPDATE public.importacoes_rel0024 "
+                    "SET produtos_inseridos = quantidade_produtos"
+                ))
+            if "vendas_inseridas" in colunas_ausentes:
+                conexao.execute(text(
+                    "UPDATE public.importacoes_rel0024 "
+                    "SET vendas_inseridas = quantidade_vendas"
+                ))
+            if "soma_quantidades_inseridas" in colunas_ausentes:
+                conexao.execute(text(
+                    "UPDATE public.importacoes_rel0024 "
+                    "SET soma_quantidades_inseridas = soma_quantidades"
+                ))
+            if "quantidade_linhas_venda" in colunas_ausentes:
+                conexao.execute(text(
+                    "UPDATE public.importacoes_rel0024 "
+                    "SET quantidade_linhas_venda = quantidade_itens_arquivo"
+                ))
+            if "soma_quantidades_liquida" in colunas_ausentes:
+                conexao.execute(text(
+                    "UPDATE public.importacoes_rel0024 "
+                    "SET soma_quantidades_liquida = soma_quantidades"
+                ))
+            if "soma_valores_liquido" in colunas_ausentes:
+                conexao.execute(text(
+                    "UPDATE public.importacoes_rel0024 "
+                    "SET soma_valores_liquido = soma_valores"
+                ))
 
 
 def _validar_para_importacao(resultado, validacao):
@@ -75,6 +149,12 @@ def _validar_para_importacao(resultado, validacao):
         problemas.append("Total Geral de quantidade divergente")
     if not validacao["total_geral_valor_confere"]:
         problemas.append("Total Geral financeiro divergente")
+    if not validacao["totais_produto_quantidade_conferem_total_geral"]:
+        problemas.append("soma dos Total Produto diverge do Total Geral")
+    if not validacao["totais_produto_valor_conferem_total_geral"]:
+        problemas.append(
+            "soma financeira dos Total Produto diverge do Total Geral"
+        )
     if len(validacao["filiais"]) != 1:
         problemas.append("mais de uma filial no mesmo arquivo")
     if problemas:
@@ -120,11 +200,17 @@ def _sincronizar_produtos(conexao, produtos_arquivo):
         (linha["filial"], linha["codigo_produto"]): dict(linha)
         for linha in encontrados
     }
+    divergencias_descricao = []
     for chave, descricao in produtos_arquivo.items():
         atual = existentes.get(chave)
         if atual and atual["descricao_original"] != descricao:
-            raise ErroImportacaoRel0024(
-                f"Descrição divergente para produto {chave}."
+            divergencias_descricao.append(
+                {
+                    "filial": chave[0],
+                    "codigo_produto": chave[1],
+                    "descricao_banco": atual["descricao_original"],
+                    "descricao_arquivo": descricao,
+                }
             )
 
     novos = [
@@ -148,7 +234,12 @@ def _sincronizar_produtos(conexao, produtos_arquivo):
         )
         if (linha.filial, linha.codigo_produto) in produtos_arquivo
     }
-    return mapa, len(novos), len(produtos_arquivo) - len(novos)
+    return (
+        mapa,
+        len(novos),
+        len(produtos_arquivo) - len(novos),
+        divergencias_descricao,
+    )
 
 
 def _sincronizar_vendas(conexao, vendas_arquivo):
@@ -189,59 +280,140 @@ def _sincronizar_vendas(conexao, vendas_arquivo):
 
 def _buscar_itens_existentes(conexao, venda_ids):
     tabela = ItemRel0024.__table__
-    existentes = {}
+    tabela_vendas = VendaRel0024.__table__
+    existentes = defaultdict(list)
     ids = sorted(venda_ids)
     for lote in _em_lotes(ids, 5000):
         linhas = conexao.execute(
-            select(tabela).where(tabela.c.venda_id.in_(lote))
+            select(
+                tabela,
+                tabela_vendas.c.data.label("data_venda"),
+                tabela_vendas.c.hora_original,
+                tabela_vendas.c.tipo_original,
+            )
+            .join(
+                tabela_vendas,
+                tabela_vendas.c.id == tabela.c.venda_id,
+            )
+            .where(tabela.c.venda_id.in_(lote))
         ).mappings()
         for linha in linhas:
-            chave = (
-                linha["venda_id"],
-                linha["produto_id"],
-                linha["ocorrencia_produto"],
-            )
-            existentes[chave] = dict(linha)
-    return existentes
+            chave_grupo = (linha["venda_id"], linha["produto_id"])
+            existentes[chave_grupo].append(dict(linha))
+    return dict(existentes)
+
+
+CAMPOS_ASSINATURA_ITEM = (
+    "data",
+    "hora",
+    "tipo",
+    "quantidade",
+    "valor_unitario",
+    "percentual_desconto",
+    "valor_desconto",
+    "valor_acrescimo",
+    "valor_total",
+)
+
+
+def _assinatura_item_arquivo(item):
+    return (
+        item["data"],
+        item["hora_bruta"],
+        item["tipo"] or None,
+        item["quantidade"],
+        item["valor_unitario"],
+        item["percentual_desconto"],
+        item["valor_desconto"],
+        item["valor_acrescimo"],
+        item["valor_total"],
+    )
+
+
+def _assinatura_item_banco(item):
+    return (
+        item["data_venda"],
+        item["hora_original"],
+        item["tipo_original"],
+        item["quantidade"],
+        item["valor_unitario"],
+        item["percentual_desconto"],
+        item["valor_desconto"],
+        item["valor_acrescimo"],
+        item["valor_total"],
+    )
+
+
+def _detalhar_diferenca_multiconjunto(assinaturas_banco, assinaturas_arquivo):
+    somente_banco = assinaturas_banco - assinaturas_arquivo
+    somente_arquivo = assinaturas_arquivo - assinaturas_banco
+
+    def formatar(contagem):
+        detalhes = []
+        for assinatura, multiplicidade in contagem.items():
+            valores = dict(zip(CAMPOS_ASSINATURA_ITEM, assinatura))
+            valores["multiplicidade"] = multiplicidade
+            detalhes.append(valores)
+        return detalhes
+
+    return formatar(somente_banco), formatar(somente_arquivo)
 
 
 def _preparar_itens(itens, mapa_vendas, mapa_produtos, existentes):
     novos = []
     ja_existentes = 0
-    campos_comparacao = (
-        "quantidade",
-        "valor_unitario",
-        "percentual_desconto",
-        "valor_desconto",
-        "valor_acrescimo",
-        "valor_total",
-    )
+    grupos_arquivo = defaultdict(list)
     for item in itens:
         venda_id = mapa_vendas[(item["filial"], item["numero_venda"])]
         produto_id = mapa_produtos[(item["filial"], item["codigo_produto"])]
-        chave = (venda_id, produto_id, item["ocorrencia_produto"])
-        valores = {
-            "venda_id": venda_id,
-            "produto_id": produto_id,
-            "ocorrencia_produto": item["ocorrencia_produto"],
-            "quantidade": item["quantidade"],
-            "valor_unitario": item["valor_unitario"],
-            "percentual_desconto": item["percentual_desconto"],
-            "valor_desconto": item["valor_desconto"],
-            "valor_acrescimo": item["valor_acrescimo"],
-            "valor_total": item["valor_total"],
-            "linha_relatorio": item["linha_relatorio"],
-        }
-        atual = existentes.get(chave)
-        if atual:
-            if any(atual[campo] != valores[campo] for campo in campos_comparacao):
-                raise ErroImportacaoRel0024(
-                    "Item existente possui valores divergentes para a chave "
-                    f"{chave}."
+        grupos_arquivo[(venda_id, produto_id)].append(item)
+
+    for chave_grupo, itens_arquivo in grupos_arquivo.items():
+        itens_banco = existentes.get(chave_grupo, [])
+        if itens_banco:
+            assinaturas_banco = Counter(
+                _assinatura_item_banco(item) for item in itens_banco
+            )
+            assinaturas_arquivo = Counter(
+                _assinatura_item_arquivo(item) for item in itens_arquivo
+            )
+            if assinaturas_banco != assinaturas_arquivo:
+                somente_banco, somente_arquivo = (
+                    _detalhar_diferenca_multiconjunto(
+                        assinaturas_banco, assinaturas_arquivo
+                    )
                 )
-            ja_existentes += 1
-        else:
-            novos.append(valores)
+                primeiro = itens_arquivo[0]
+                chave_natural = (
+                    primeiro["filial"],
+                    primeiro["numero_venda"],
+                    primeiro["codigo_produto"],
+                )
+                raise ErroImportacaoRel0024(
+                    "Itens existentes possuem conteúdo divergente para o "
+                    "grupo (filial, venda, produto) "
+                    f"{chave_natural}. Somente no banco: {somente_banco}. "
+                    f"Somente no arquivo: {somente_arquivo}."
+                )
+            ja_existentes += len(itens_arquivo)
+            continue
+
+        venda_id, produto_id = chave_grupo
+        for item in itens_arquivo:
+            novos.append(
+                {
+                    "venda_id": venda_id,
+                    "produto_id": produto_id,
+                    "ocorrencia_produto": item["ocorrencia_produto"],
+                    "quantidade": item["quantidade"],
+                    "valor_unitario": item["valor_unitario"],
+                    "percentual_desconto": item["percentual_desconto"],
+                    "valor_desconto": item["valor_desconto"],
+                    "valor_acrescimo": item["valor_acrescimo"],
+                    "valor_total": item["valor_total"],
+                    "linha_relatorio": item["linha_relatorio"],
+                }
+            )
     return novos, ja_existentes
 
 
@@ -283,107 +455,295 @@ def _contagens_finais(conexao):
     return contagens
 
 
-def importar_rel0024(caminho=ARQUIVO_PADRAO):
+def _buscar_importacao_por_hash(conexao, hash_sha256):
+    return conexao.execute(
+        select(ImportacaoRel0024.__table__).where(
+            ImportacaoRel0024.__table__.c.hash_sha256 == hash_sha256
+        )
+    ).mappings().first()
+
+
+def _buscar_divergencias_descricao(conexao, importacao_id):
+    tabela = DivergenciaDescricaoRel0024.__table__
+    return [
+        dict(linha)
+        for linha in conexao.execute(
+            select(
+                tabela.c.filial,
+                tabela.c.codigo_produto,
+                tabela.c.descricao_banco,
+                tabela.c.descricao_arquivo,
+            )
+            .where(tabela.c.importacao_id == importacao_id)
+            .order_by(tabela.c.filial, tabela.c.codigo_produto)
+        ).mappings()
+    ]
+
+
+def _relatorio_hash_existente(
+    conexao, importacao, caminho, hash_sha256, inicio
+):
+    validacao = {
+        "filiais": [importacao["filial"]],
+        "primeira_data": importacao["periodo_inicial"],
+        "ultima_data": importacao["periodo_final"],
+        "vendas_distintas": importacao["quantidade_vendas"],
+        "itens": importacao["quantidade_itens_arquivo"],
+        "produtos_distintos": importacao["quantidade_produtos"],
+        "soma_quantidades": importacao["soma_quantidades"],
+        "soma_valores": importacao["soma_valores"],
+        "linhas_venda": importacao["quantidade_linhas_venda"],
+        "linhas_devolucao": importacao["quantidade_linhas_devolucao"],
+        "quantidade_vendas": importacao["soma_quantidades"],
+        "valor_vendas": importacao["soma_valores"],
+        "quantidade_devolucoes": importacao[
+            "soma_quantidades_devolucao"
+        ],
+        "valor_devolucoes": importacao["soma_valores_devolucao"],
+        "quantidade_liquida_calculada": importacao[
+            "soma_quantidades_liquida"
+        ],
+        "valor_liquido_calculado": importacao["soma_valores_liquido"],
+        "quantidade_total_geral": importacao["soma_quantidades_liquida"],
+        "valor_total_geral": importacao["soma_valores_liquido"],
+        "linhas_invalidas": importacao["registros_invalidos"],
+        "chaves_repetidas": {},
+    }
+    resultado = {
+        "arquivo": Path(caminho),
+        "hash_sha256": hash_sha256,
+        "aba_utilizada": "não reprocessada (hash já registrado)",
+        "linhas_estrutura": importacao["quantidade_linhas_lidas"],
+        "linhas_movimento": importacao["quantidade_itens_arquivo"],
+        "linhas_venda": importacao["quantidade_linhas_venda"],
+        "linhas_devolucao": importacao["quantidade_linhas_devolucao"],
+        "linhas_nao_venda": importacao["quantidade_linhas_nao_venda"],
+    }
+    return {
+        "banco": _confirmar_destino(conexao),
+        "resultado": resultado,
+        "validacao": validacao,
+        "arquivo_ja_importado": True,
+        "nome_arquivo": importacao["nome_arquivo"],
+        "produtos_inseridos": 0,
+        "produtos_existentes": importacao["quantidade_produtos"],
+        "vendas_inseridas": 0,
+        "vendas_existentes": importacao["quantidade_vendas"],
+        "itens_inseridos": 0,
+        "itens_existentes": importacao["quantidade_itens_arquivo"],
+        "soma_quantidades_inseridas": 0,
+        "linhas_nao_venda": importacao["quantidade_linhas_nao_venda"],
+        "divergencias_descricao": _buscar_divergencias_descricao(
+            conexao, importacao["id"]
+        ),
+        "contagens": _contagens_finais(conexao),
+        "tempo_total_segundos": time.perf_counter() - inicio,
+    }
+
+
+def _importar_na_transacao(
+    conexao, resultado, validacao, caminho, nome_arquivo, inicio
+):
+    banco = _confirmar_destino(conexao)
+    importacao_existente = _buscar_importacao_por_hash(
+        conexao, resultado["hash_sha256"]
+    )
+    if importacao_existente:
+        return _relatorio_hash_existente(
+            conexao,
+            importacao_existente,
+            caminho,
+            resultado["hash_sha256"],
+            inicio,
+        )
+
+    produtos_arquivo = _produtos_do_arquivo(resultado["itens"])
+    vendas_arquivo = _vendas_do_arquivo(resultado["itens"])
+    (
+        mapa_produtos,
+        produtos_inseridos,
+        produtos_existentes,
+        divergencias_descricao,
+    ) = (
+        _sincronizar_produtos(conexao, produtos_arquivo)
+    )
+    mapa_vendas, vendas_inseridas, vendas_existentes = (
+        _sincronizar_vendas(conexao, vendas_arquivo)
+    )
+    existentes = _buscar_itens_existentes(conexao, set(mapa_vendas.values()))
+    novos_itens, itens_existentes = _preparar_itens(
+        resultado["itens"], mapa_vendas, mapa_produtos, existentes
+    )
+    soma_quantidades_inseridas = sum(
+        (item["quantidade"] for item in novos_itens), start=0
+    )
+    tempo_ate_auditoria = time.perf_counter() - inicio
+
+    importacao_id = conexao.execute(
+        insert(ImportacaoRel0024.__table__)
+        .values(
+            hash_sha256=resultado["hash_sha256"],
+            nome_arquivo=nome_arquivo,
+            periodo_inicial=validacao["primeira_data"],
+            periodo_final=validacao["ultima_data"],
+            filial=validacao["filiais"][0],
+            quantidade_vendas=validacao["vendas_distintas"],
+            quantidade_itens_arquivo=validacao["itens"],
+            quantidade_itens_inseridos=len(novos_itens),
+            quantidade_produtos=validacao["produtos_distintos"],
+            soma_quantidades=validacao["soma_quantidades"],
+            soma_valores=validacao["soma_valores"],
+            registros_invalidos=validacao["linhas_invalidas"],
+            quantidade_linhas_lidas=resultado["linhas_estrutura"],
+            quantidade_linhas_nao_venda=resultado["linhas_nao_venda"],
+            quantidade_linhas_venda=resultado["linhas_venda"],
+            quantidade_linhas_devolucao=resultado["linhas_devolucao"],
+            soma_quantidades_devolucao=resultado[
+                "quantidade_devolucoes"
+            ],
+            soma_valores_devolucao=resultado["valor_devolucoes"],
+            soma_quantidades_liquida=resultado[
+                "quantidade_liquida_calculada"
+            ],
+            soma_valores_liquido=resultado["valor_liquido_calculado"],
+            produtos_inseridos=produtos_inseridos,
+            produtos_existentes=produtos_existentes,
+            vendas_inseridas=vendas_inseridas,
+            vendas_existentes=vendas_existentes,
+            itens_existentes=itens_existentes,
+            soma_quantidades_inseridas=soma_quantidades_inseridas,
+            quantidade_conflitos=0,
+            quantidade_divergencias_descricao=len(
+                divergencias_descricao
+            ),
+            tempo_processamento_segundos=tempo_ate_auditoria,
+        )
+        .returning(ImportacaoRel0024.__table__.c.id)
+    ).scalar_one()
+    for divergencia in divergencias_descricao:
+        divergencia["importacao_id"] = importacao_id
+    for lote in _em_lotes(divergencias_descricao):
+        conexao.execute(
+            insert(DivergenciaDescricaoRel0024.__table__), lote
+        )
+    for item in novos_itens:
+        item["importacao_id"] = importacao_id
+    for lote in _em_lotes(novos_itens):
+        conexao.execute(insert(ItemRel0024.__table__), lote)
+
+    contagens = _contagens_finais(conexao)
+    if any(
+        contagens[campo] != 0
+        for campo in (
+            "duplicidades_produtos",
+            "duplicidades_vendas",
+            "duplicidades_itens",
+        )
+    ):
+        raise ErroImportacaoRel0024(
+            "A validação encontrou duplicidades após a carga."
+        )
+
+    return {
+        "banco": banco,
+        "resultado": resultado,
+        "validacao": validacao,
+        "arquivo_ja_importado": False,
+        "nome_arquivo": nome_arquivo,
+        "produtos_inseridos": produtos_inseridos,
+        "produtos_existentes": produtos_existentes,
+        "vendas_inseridas": vendas_inseridas,
+        "vendas_existentes": vendas_existentes,
+        "itens_inseridos": len(novos_itens),
+        "itens_existentes": itens_existentes,
+        "soma_quantidades_inseridas": soma_quantidades_inseridas,
+        "linhas_nao_venda": resultado["linhas_nao_venda"],
+        "divergencias_descricao": divergencias_descricao,
+        "contagens": contagens,
+        "tempo_total_segundos": time.perf_counter() - inicio,
+    }
+
+
+def importar_rel0024(
+    caminho=ARQUIVO_PADRAO,
+    nome_arquivo=None,
+    *,
+    conexao_externa=None,
+):
+    """Importa um arquivo; ``conexao_externa`` existe apenas para testes isolados."""
+
     inicio = time.perf_counter()
-    resultado = ler_rel0024(Path(caminho))
-    validacao = validar_rel0024(resultado)
-    _validar_para_importacao(resultado, validacao)
+    caminho = Path(caminho)
+    if not caminho.is_file():
+        raise ErroRel0024(f"Arquivo não encontrado: {caminho}.")
+    if caminho.suffix.lower() not in (".xls", ".xlsx"):
+        raise ErroRel0024("O relatório deve possuir extensão .xls ou .xlsx.")
+    nome_auditoria = Path(nome_arquivo or caminho.name).name[:255]
+    hash_sha256 = calcular_hash_rel0024(caminho)
 
-    engine = create_engine(obter_url_banco_aplicacao(), pool_pre_ping=True)
-    try:
+    engine = None
+    if conexao_externa is None:
+        engine = create_engine(obter_url_banco_aplicacao(), pool_pre_ping=True)
         _criar_estrutura(engine)
-        with engine.begin() as conexao:
-            banco = _confirmar_destino(conexao)
-            importacao_existente = conexao.execute(
-                select(ImportacaoRel0024.__table__).where(
-                    ImportacaoRel0024.__table__.c.hash_sha256
-                    == resultado["hash_sha256"]
-                )
-            ).mappings().first()
+        with engine.connect() as conexao:
+            importacao_existente = _buscar_importacao_por_hash(
+                conexao, hash_sha256
+            )
             if importacao_existente:
-                contagens = _contagens_finais(conexao)
-                return {
-                    "banco": banco,
-                    "resultado": resultado,
-                    "validacao": validacao,
-                    "arquivo_ja_importado": True,
-                    "produtos_inseridos": 0,
-                    "produtos_existentes": validacao["produtos_distintos"],
-                    "vendas_inseridas": 0,
-                    "vendas_existentes": validacao["vendas_distintas"],
-                    "itens_inseridos": 0,
-                    "itens_existentes": validacao["itens"],
-                    "contagens": contagens,
-                    "tempo_total_segundos": time.perf_counter() - inicio,
-                }
-
-            produtos_arquivo = _produtos_do_arquivo(resultado["itens"])
-            vendas_arquivo = _vendas_do_arquivo(resultado["itens"])
-            mapa_produtos, produtos_inseridos, produtos_existentes = (
-                _sincronizar_produtos(conexao, produtos_arquivo)
-            )
-            mapa_vendas, vendas_inseridas, vendas_existentes = (
-                _sincronizar_vendas(conexao, vendas_arquivo)
-            )
-            existentes = _buscar_itens_existentes(
-                conexao, set(mapa_vendas.values())
-            )
-            novos_itens, itens_existentes = _preparar_itens(
-                resultado["itens"], mapa_vendas, mapa_produtos, existentes
-            )
-
-            importacao_id = conexao.execute(
-                insert(ImportacaoRel0024.__table__)
-                .values(
-                    hash_sha256=resultado["hash_sha256"],
-                    nome_arquivo=Path(caminho).name,
-                    periodo_inicial=validacao["primeira_data"],
-                    periodo_final=validacao["ultima_data"],
-                    filial=validacao["filiais"][0],
-                    quantidade_vendas=validacao["vendas_distintas"],
-                    quantidade_itens_arquivo=validacao["itens"],
-                    quantidade_itens_inseridos=len(novos_itens),
-                    quantidade_produtos=validacao["produtos_distintos"],
-                    soma_quantidades=validacao["soma_quantidades"],
-                    soma_valores=validacao["soma_valores"],
-                    registros_invalidos=validacao["linhas_invalidas"],
+                relatorio = _relatorio_hash_existente(
+                    conexao,
+                    importacao_existente,
+                    caminho,
+                    hash_sha256,
+                    inicio,
                 )
-                .returning(ImportacaoRel0024.__table__.c.id)
-            ).scalar_one()
-            for item in novos_itens:
-                item["importacao_id"] = importacao_id
-            for lote in _em_lotes(novos_itens):
-                conexao.execute(insert(ItemRel0024.__table__), lote)
+                engine.dispose()
+                return relatorio
+    else:
+        _confirmar_destino(conexao_externa)
+        importacao_existente = _buscar_importacao_por_hash(
+            conexao_externa, hash_sha256
+        )
+        if importacao_existente:
+            return _relatorio_hash_existente(
+                conexao_externa,
+                importacao_existente,
+                caminho,
+                hash_sha256,
+                inicio,
+            )
 
-            contagens = _contagens_finais(conexao)
-            if any(
-                contagens[campo] != 0
-                for campo in (
-                    "duplicidades_produtos",
-                    "duplicidades_vendas",
-                    "duplicidades_itens",
-                )
-            ):
-                raise ErroImportacaoRel0024(
-                    "A validação encontrou duplicidades após a carga."
-                )
+    try:
+        resultado = ler_rel0024(caminho)
+        if resultado["hash_sha256"] != hash_sha256:
+            raise ErroImportacaoRel0024(
+                "O arquivo foi alterado durante o processamento."
+            )
+        validacao = validar_rel0024(resultado)
+        _validar_para_importacao(resultado, validacao)
 
-        return {
-            "banco": banco,
-            "resultado": resultado,
-            "validacao": validacao,
-            "arquivo_ja_importado": False,
-            "produtos_inseridos": produtos_inseridos,
-            "produtos_existentes": produtos_existentes,
-            "vendas_inseridas": vendas_inseridas,
-            "vendas_existentes": vendas_existentes,
-            "itens_inseridos": len(novos_itens),
-            "itens_existentes": itens_existentes,
-            "contagens": contagens,
-            "tempo_total_segundos": time.perf_counter() - inicio,
-        }
+        if conexao_externa is not None:
+            with conexao_externa.begin_nested():
+                return _importar_na_transacao(
+                    conexao_externa,
+                    resultado,
+                    validacao,
+                    caminho,
+                    nome_auditoria,
+                    inicio,
+                )
+        with engine.begin() as conexao:
+            return _importar_na_transacao(
+                conexao,
+                resultado,
+                validacao,
+                caminho,
+                nome_auditoria,
+                inicio,
+            )
     finally:
-        engine.dispose()
+        if engine is not None:
+            engine.dispose()
 
 
 def imprimir_relatorio(relatorio):
@@ -410,6 +770,28 @@ def imprimir_relatorio(relatorio):
     print(f"Soma das quantidades: {validacao['soma_quantidades']}")
     print(f"Soma dos valores: {validacao['soma_valores']}")
     print(f"Registros inválidos: {validacao['linhas_invalidas']}")
+    print(f"Linhas físicas lidas: {resultado.get('linhas_estrutura', 0)}")
+    print(f"Linhas de movimento: {resultado.get('linhas_movimento', 0)}")
+    print(f"Linhas Venda: {resultado.get('linhas_venda', validacao['itens'])}")
+    print(f"Linhas Devol: {resultado.get('linhas_devolucao', 0)}")
+    print(f"Linhas não Venda ignoradas: {relatorio['linhas_nao_venda']}")
+    print(
+        f"Venda bruta - quantidade: {validacao['quantidade_vendas']}; "
+        f"valor: {validacao['valor_vendas']}"
+    )
+    print(
+        f"Devoluções - quantidade: {validacao['quantidade_devolucoes']}; "
+        f"valor líquido: {validacao['valor_devolucoes']}"
+    )
+    print(
+        "Total líquido calculado - quantidade: "
+        f"{validacao['quantidade_liquida_calculada']}; valor: "
+        f"{validacao['valor_liquido_calculado']}"
+    )
+    print(
+        f"Total Geral informado - quantidade: {validacao['quantidade_total_geral']}; "
+        f"valor: {validacao['valor_total_geral']}"
+    )
     print(
         "Chaves venda+produto repetidas no arquivo: "
         f"{len(validacao['chaves_repetidas'])} "
@@ -428,6 +810,22 @@ def imprimir_relatorio(relatorio):
         f"Itens - inseridos: {relatorio['itens_inseridos']}; "
         f"existentes: {relatorio['itens_existentes']}"
     )
+    print(
+        "Quantidade - lida em Venda: "
+        f"{validacao['soma_quantidades']}; acrescentada: "
+        f"{relatorio['soma_quantidades_inseridas']}"
+    )
+    print(
+        "Divergências de descrição auditadas: "
+        f"{len(relatorio['divergencias_descricao'])}"
+    )
+    for divergencia in relatorio["divergencias_descricao"]:
+        print(
+            f"- filial {divergencia['filial']}, produto "
+            f"{divergencia['codigo_produto']}: "
+            f"banco={divergencia['descricao_banco']!r}; "
+            f"arquivo={divergencia['descricao_arquivo']!r}"
+        )
     print("CONTAGENS FINAIS")
     for campo, valor in relatorio["contagens"].items():
         print(f"- {campo}: {valor}")

@@ -7,8 +7,10 @@ from pathlib import Path
 import re
 import time
 import warnings
+from zipfile import BadZipFile
 
 from openpyxl import load_workbook
+from openpyxl.utils.exceptions import InvalidFileException
 
 
 PADRAO_TOTAL_PRODUTO = re.compile(
@@ -78,6 +80,19 @@ def _texto_bruto(valor):
     return str(valor)
 
 
+def _tipo_normalizado(valor):
+    return str(valor or "").strip().casefold()
+
+
+def _contribuicao_liquida(movimento, campo):
+    """Normaliza Devol como redução, mesmo se a quantidade vier positiva."""
+
+    valor = movimento[campo] or Decimal("0")
+    if _tipo_normalizado(movimento["tipo"]) == "devol":
+        return -abs(valor)
+    return valor
+
+
 def _validar_cabecalho(linha):
     esperados = {
         COL_VENDA: "venda",
@@ -117,17 +132,27 @@ def ler_rel0024(caminho):
         )
 
     if extensao == ".xlsx":
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore", message="Workbook contains no default style.*"
-            )
-            workbook = load_workbook(caminho, read_only=True, data_only=True)
+        try:
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore", message="Workbook contains no default style.*"
+                )
+                workbook = load_workbook(
+                    caminho, read_only=True, data_only=True
+                )
+        except (BadZipFile, InvalidFileException, OSError, ValueError) as erro:
+            raise ErroRel0024(
+                "O conteúdo do arquivo XLSX é inválido ou está corrompido."
+            ) from erro
         abas = workbook.sheetnames
         if not abas:
             workbook.close()
             raise ErroRel0024("O arquivo não possui planilhas.")
         planilha = workbook[abas[0]]
-        dimensao_declarada = planilha.calculate_dimension()
+        try:
+            dimensao_declarada = planilha.calculate_dimension()
+        except ValueError:
+            dimensao_declarada = "dimensão não declarada"
         planilha.reset_dimensions()
         iterador_linhas = planilha.iter_rows(max_col=MAX_COLUNAS)
         fechar_workbook = workbook.close
@@ -139,7 +164,12 @@ def ler_rel0024(caminho):
             raise ErroRel0024(
                 "Instale as dependências de requirements.txt para ler XLS."
             ) from erro
-        workbook = xlrd.open_workbook(caminho, on_demand=True)
+        try:
+            workbook = xlrd.open_workbook(caminho, on_demand=True)
+        except Exception as erro:
+            raise ErroRel0024(
+                "O conteúdo do arquivo XLS é inválido ou está corrompido."
+            ) from erro
         abas = workbook.sheet_names()
         if not abas:
             workbook.release_resources()
@@ -176,6 +206,15 @@ def ler_rel0024(caminho):
         total_geral_valor = None
         linhas_estrutura = 0
         ocorrencias_por_chave = Counter()
+        linhas_movimento = 0
+        linhas_venda = 0
+        linhas_nao_venda = 0
+        linhas_devolucao = 0
+        linhas_outros_movimentos = 0
+        quantidade_vendas = Decimal("0")
+        valor_vendas = Decimal("0")
+        quantidade_devolucoes = Decimal("0")
+        valor_devolucoes = Decimal("0")
 
         for numero_linha, linha in enumerate(iterador_linhas, start=1):
             linhas_estrutura = numero_linha
@@ -200,6 +239,8 @@ def ler_rel0024(caminho):
                 descricoes.add(descricao)
 
                 for venda in pendentes:
+                    if _tipo_normalizado(venda["tipo"]) != "venda":
+                        continue
                     chave_ocorrencia = (
                         venda["filial"],
                         venda["numero_venda"],
@@ -230,7 +271,9 @@ def ler_rel0024(caminho):
                         "quantidade_informada": total_qtd_informado,
                         "quantidade_calculada": sum(
                             (
-                                venda["quantidade"] or Decimal("0")
+                                _contribuicao_liquida(
+                                    venda, "quantidade"
+                                )
                                 for venda in pendentes
                             ),
                             Decimal("0"),
@@ -238,7 +281,9 @@ def ler_rel0024(caminho):
                         "valor_informado": total_valor_informado,
                         "valor_calculado": sum(
                             (
-                                venda["valor_total"] or Decimal("0")
+                                _contribuicao_liquida(
+                                    venda, "valor_total"
+                                )
                                 for venda in pendentes
                             ),
                             Decimal("0"),
@@ -267,34 +312,49 @@ def ler_rel0024(caminho):
                         (numero_linha, "Linha de venda com campo obrigatório inválido")
                     )
                     continue
-                pendentes.append(
-                    {
-                        "numero_venda": numero_venda,
-                        "filial": filial,
-                        "data": data_emissao,
-                        "hora_bruta": _texto_bruto(
-                            _valor(linha, COL_HORA_BRUTA)
-                        ),
-                        "tipo": tipo,
-                        "quantidade": quantidade,
-                        "valor_unitario": _decimal(
-                            _valor(linha, COL_VALOR_UNITARIO)
-                        ),
-                        "percentual_desconto": _decimal(
-                            _valor(linha, COL_PERCENTUAL_DESCONTO)
-                        ),
-                        "valor_desconto": _decimal(
-                            _valor(linha, COL_VALOR_DESCONTO)
-                        ),
-                        "valor_acrescimo": _decimal(
-                            _valor(linha, COL_VALOR_ACRESCIMO)
-                        ),
-                        "valor_total": _decimal(
-                            _valor(linha, COL_TOTAL_ITEM)
-                        ),
-                        "linha_relatorio": numero_linha,
-                    }
-                )
+                movimento = {
+                    "numero_venda": numero_venda,
+                    "filial": filial,
+                    "data": data_emissao,
+                    "hora_bruta": _texto_bruto(
+                        _valor(linha, COL_HORA_BRUTA)
+                    ),
+                    "tipo": tipo,
+                    "quantidade": quantidade,
+                    "valor_unitario": _decimal(
+                        _valor(linha, COL_VALOR_UNITARIO)
+                    ),
+                    "percentual_desconto": _decimal(
+                        _valor(linha, COL_PERCENTUAL_DESCONTO)
+                    ),
+                    "valor_desconto": _decimal(
+                        _valor(linha, COL_VALOR_DESCONTO)
+                    ),
+                    "valor_acrescimo": _decimal(
+                        _valor(linha, COL_VALOR_ACRESCIMO)
+                    ),
+                    "valor_total": _decimal(
+                        _valor(linha, COL_TOTAL_ITEM)
+                    ),
+                    "linha_relatorio": numero_linha,
+                }
+                pendentes.append(movimento)
+                linhas_movimento += 1
+                tipo_normalizado = _tipo_normalizado(tipo)
+                if tipo_normalizado == "venda":
+                    linhas_venda += 1
+                    quantidade_vendas += quantidade
+                    valor_vendas += movimento["valor_total"] or Decimal("0")
+                elif tipo_normalizado == "devol":
+                    linhas_devolucao += 1
+                    linhas_nao_venda += 1
+                    quantidade_devolucoes += abs(quantidade)
+                    valor_devolucoes += -abs(
+                        movimento["valor_total"] or Decimal("0")
+                    )
+                else:
+                    linhas_nao_venda += 1
+                    linhas_outros_movimentos += 1
                 continue
 
             if any(
@@ -319,11 +379,16 @@ def ler_rel0024(caminho):
 
         return {
             "arquivo": caminho,
-            "hash_sha256": _calcular_hash(caminho),
+            "hash_sha256": calcular_hash_rel0024(caminho),
             "abas": abas,
             "aba_utilizada": aba_utilizada,
             "dimensao_declarada": dimensao_declarada,
             "linhas_estrutura": linhas_estrutura,
+            "linhas_movimento": linhas_movimento,
+            "linhas_venda": linhas_venda,
+            "linhas_devolucao": linhas_devolucao,
+            "linhas_outros_movimentos": linhas_outros_movimentos,
+            "linhas_nao_venda": linhas_nao_venda,
             "total_linhas_produto": total_produtos,
             "linhas_ignoradas": linhas_ignoradas,
             "linhas_invalidas": linhas_invalidas,
@@ -331,6 +396,14 @@ def ler_rel0024(caminho):
             "totais_produto": totais_produto,
             "total_geral_quantidade": total_geral_quantidade,
             "total_geral_valor": total_geral_valor,
+            "quantidade_vendas": quantidade_vendas,
+            "valor_vendas": valor_vendas,
+            "quantidade_devolucoes": quantidade_devolucoes,
+            "valor_devolucoes": valor_devolucoes,
+            "quantidade_liquida_calculada": (
+                quantidade_vendas - quantidade_devolucoes
+            ),
+            "valor_liquido_calculado": valor_vendas + valor_devolucoes,
             "itens": itens,
             "tempo_leitura_segundos": time.perf_counter() - inicio,
         }
@@ -338,7 +411,8 @@ def ler_rel0024(caminho):
         fechar_workbook()
 
 
-def _calcular_hash(caminho):
+def calcular_hash_rel0024(caminho):
+    """Calcula o SHA-256 em blocos, sem carregar o arquivo inteiro."""
     import hashlib
 
     resumo = hashlib.sha256()
@@ -404,6 +478,20 @@ def validar_rel0024(resultado):
     soma_valores = sum(
         (item["valor_total"] or Decimal("0") for item in itens), Decimal("0")
     )
+    soma_totais_produto_quantidade = sum(
+        (
+            total["quantidade_informada"] or Decimal("0")
+            for total in resultado["totais_produto"]
+        ),
+        Decimal("0"),
+    )
+    soma_totais_produto_valor = sum(
+        (
+            total["valor_informado"] or Decimal("0")
+            for total in resultado["totais_produto"]
+        ),
+        Decimal("0"),
+    )
     return {
         "filiais": filiais,
         "primeira_data": min(datas) if datas else None,
@@ -413,6 +501,23 @@ def validar_rel0024(resultado):
         "produtos_distintos": len(produtos),
         "soma_quantidades": soma_quantidade,
         "soma_valores": soma_valores,
+        "linhas_venda": resultado["linhas_venda"],
+        "linhas_devolucao": resultado["linhas_devolucao"],
+        "linhas_outros_movimentos": resultado[
+            "linhas_outros_movimentos"
+        ],
+        "quantidade_vendas": resultado["quantidade_vendas"],
+        "valor_vendas": resultado["valor_vendas"],
+        "quantidade_devolucoes": resultado["quantidade_devolucoes"],
+        "valor_devolucoes": resultado["valor_devolucoes"],
+        "quantidade_liquida_calculada": resultado[
+            "quantidade_liquida_calculada"
+        ],
+        "valor_liquido_calculado": resultado["valor_liquido_calculado"],
+        "quantidade_total_geral": resultado["total_geral_quantidade"],
+        "valor_total_geral": resultado["total_geral_valor"],
+        "soma_totais_produto_quantidade": soma_totais_produto_quantidade,
+        "soma_totais_produto_valor": soma_totais_produto_valor,
         "linhas_invalidas": len(resultado["linhas_invalidas"]),
         "chaves_repetidas": chaves_repetidas,
         "vendas_conflitantes": vendas_conflitantes,
@@ -420,9 +525,27 @@ def validar_rel0024(resultado):
         "divergencias_totais_quantidade": divergencias_qtd,
         "divergencias_totais_valor": divergencias_valor,
         "total_geral_quantidade_confere": (
-            resultado["total_geral_quantidade"] == soma_quantidade
+            resultado["total_geral_quantidade"]
+            == resultado["quantidade_liquida_calculada"]
         ),
         "total_geral_valor_confere": (
-            resultado["total_geral_valor"] == soma_valores
+            resultado["total_geral_valor"] is not None
+            and abs(
+                resultado["total_geral_valor"]
+                - resultado["valor_liquido_calculado"]
+            )
+            <= Decimal("0.02")
+        ),
+        "totais_produto_quantidade_conferem_total_geral": (
+            soma_totais_produto_quantidade
+            == resultado["total_geral_quantidade"]
+        ),
+        "totais_produto_valor_conferem_total_geral": (
+            resultado["total_geral_valor"] is not None
+            and abs(
+                soma_totais_produto_valor
+                - resultado["total_geral_valor"]
+            )
+            <= Decimal("0.02")
         ),
     }

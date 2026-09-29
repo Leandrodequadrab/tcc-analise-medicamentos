@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Importar Rel_0024</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <main class="container">
+        <h1>Importação do relatório Rel_0024</h1>
+        <p>Envie um arquivo XLSX ou XLS. Somente movimentos do tipo <strong>Venda</strong> serão importados.</p>
+
+        {% if erro %}
+            <div class="mensagem erro" role="alert">{{ erro }}</div>
+        {% endif %}
+
+        {% if resultado %}
+            <div class="mensagem sucesso" role="status">
+                {% if resultado.arquivo_ja_importado %}
+                    Este arquivo exato já havia sido importado. Nenhum dado foi alterado.
+                {% else %}
+                    Processamento concluído de forma transacional.
+                {% endif %}
+            </div>
+
+            <section class="resultado-importacao" aria-labelledby="titulo-resultado">
+                <h2 id="titulo-resultado">Resultado da importação</h2>
+                <dl class="grade-resultado">
+                    <div><dt>Arquivo</dt><dd>{{ resultado.arquivo }}</dd></div>
+                    <div><dt>Filial</dt><dd>{{ resultado.filial }}</dd></div>
+                    <div><dt>Período</dt><dd>{{ resultado.periodo_inicial }} a {{ resultado.periodo_final }}</dd></div>
+                    <div><dt>Linhas físicas lidas</dt><dd>{{ resultado.linhas_lidas }}</dd></div>
+                    <div><dt>Linhas Venda</dt><dd>{{ resultado.linhas_venda }}</dd></div>
+                    <div><dt>Linhas Devol ignoradas</dt><dd>{{ resultado.linhas_devolucao }}</dd></div>
+                    <div><dt>Vendas lidas</dt><dd>{{ resultado.vendas_lidas }}</dd></div>
+                    <div><dt>Vendas novas</dt><dd>{{ resultado.vendas_novas }}</dd></div>
+                    <div><dt>Vendas existentes</dt><dd>{{ resultado.vendas_existentes }}</dd></div>
+                    <div><dt>Itens lidos</dt><dd>{{ resultado.itens_lidos }}</dd></div>
+                    <div><dt>Itens novos</dt><dd>{{ resultado.itens_novos }}</dd></div>
+                    <div><dt>Itens existentes</dt><dd>{{ resultado.itens_existentes }}</dd></div>
+                    <div><dt>Produtos lidos</dt><dd>{{ resultado.produtos_lidos }}</dd></div>
+                    <div><dt>Produtos novos</dt><dd>{{ resultado.produtos_novos }}</dd></div>
+                    <div><dt>Produtos existentes</dt><dd>{{ resultado.produtos_existentes }}</dd></div>
+                    <div><dt>Quantidade lida</dt><dd>{{ resultado.quantidade_lida }}</dd></div>
+                    <div><dt>Valor bruto de Venda</dt><dd>R$ {{ resultado.valor_vendas }}</dd></div>
+                    <div><dt>Quantidade devolvida</dt><dd>{{ resultado.quantidade_devolucoes }}</dd></div>
+                    <div><dt>Valor das devoluções</dt><dd>R$ {{ resultado.valor_devolucoes }}</dd></div>
+                    <div><dt>Quantidade líquida calculada</dt><dd>{{ resultado.quantidade_liquida }}</dd></div>
+                    <div><dt>Valor líquido calculado</dt><dd>R$ {{ resultado.valor_liquido }}</dd></div>
+                    <div><dt>Total Geral — quantidade</dt><dd>{{ resultado.quantidade_total_geral }}</dd></div>
+                    <div><dt>Total Geral — valor</dt><dd>R$ {{ resultado.valor_total_geral }}</dd></div>
+                    <div><dt>Quantidade acrescentada</dt><dd>{{ resultado.quantidade_acrescentada }}</dd></div>
+                    <div><dt>Linhas não Venda ignoradas</dt><dd>{{ resultado.linhas_nao_venda }}</dd></div>
+                    <div><dt>Registros inválidos</dt><dd>{{ resultado.registros_invalidos }}</dd></div>
+                    <div><dt>Divergências de descrição</dt><dd>{{ resultado.divergencias_descricao|length }}</dd></div>
+                    <div><dt>Tempo de processamento</dt><dd>{{ '%.2f'|format(resultado.tempo_segundos) }} s</dd></div>
+                </dl>
+                {% if resultado.divergencias_descricao %}
+                    <h3>Descrições divergentes preservadas na auditoria</h3>
+                    <div class="table-responsive">
+                        <table>
+                            <thead><tr><th>Filial</th><th>Código</th><th>Descrição histórica</th><th>Descrição recebida</th></tr></thead>
+                            <tbody>
+                                {% for item in resultado.divergencias_descricao %}
+                                    <tr><td>{{ item.filial }}</td><td>{{ item.codigo_produto }}</td><td>{{ item.descricao_banco }}</td><td>{{ item.descricao_arquivo }}</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="ajuda">A identidade foi mantida por filial + código. A descrição histórica não foi sobrescrita.</p>
+                {% endif %}
+            </section>
+        {% endif %}
+
+        <form id="form-rel0024" action="{{ url_for('importar_rel0024_web') }}" method="post" enctype="multipart/form-data">
+            <label for="arquivo-rel0024">Relatório Rel_0024</label>
+            <input id="arquivo-rel0024" name="arquivo" type="file" accept=".xlsx,.xls" required>
+            <button id="botao-importar-rel0024" type="submit">Importar relatório</button>
+            <p id="estado-processamento" class="ajuda" hidden>Processando o relatório. Não feche esta página…</p>
+        </form>
+
+        <p class="ajuda">Limite: 50 MB. O arquivo temporário é removido ao final. O Modelo C não é executado durante a importação.</p>
+        <nav class="links-navegacao" aria-label="Navegação">
+            <a class="link-dashboard" href="{{ url_for('dashboard') }}">Voltar ao dashboard</a>
+            <a class="link-dashboard" href="{{ url_for('index') }}">Importação CSV fictícia</a>
+        </nav>
+    </main>
+    <script src="{{ url_for('static', filename='js/importar_rel0024.js') }}"></script>
+</body>
+</html>

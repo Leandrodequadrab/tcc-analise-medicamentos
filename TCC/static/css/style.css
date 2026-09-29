@@ -67,3 +67,66 @@ button:hover {
     color: #176b4d;
     font-weight: 700;
 }
+
+.links-navegacao {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 18px;
+    margin-top: 24px;
+}
+
+.resultado-importacao {
+    max-width: 780px;
+    margin: 28px auto;
+    padding: 24px;
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgb(0 0 0 / 10%);
+    text-align: left;
+}
+
+.resultado-importacao h2 {
+    margin-top: 0;
+    text-align: center;
+}
+
+.grade-resultado {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 12px;
+    margin: 0;
+}
+
+.grade-resultado div {
+    padding: 12px;
+    border: 1px solid #dce3e8;
+    border-radius: 6px;
+}
+
+.grade-resultado dt {
+    color: #52606d;
+    font-size: 0.82rem;
+}
+
+.grade-resultado dd {
+    margin: 5px 0 0;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.table-responsive {
+    overflow-x: auto;
+}
+
+.resultado-importacao table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.resultado-importacao th,
+.resultado-importacao td {
+    padding: 10px;
+    border: 1px solid #dce3e8;
+    vertical-align: top;
+}
