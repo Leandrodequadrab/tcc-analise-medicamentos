@@ -17,8 +17,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from database import obter_url_banco_aplicacao
 from utils.classificacao_medicamentos import (
     CLASSIFICACOES_MED,
-    classificar_tipo_medicamento,
-    elegivel_analise_automedicacao,
 )
 
 
@@ -71,6 +69,8 @@ SQL_SERIE_DIARIA = text(
         p.cod_tipo,
         p.nom_tipo,
         p.origem_classificacao,
+        p.classificacao_operacional,
+        p.elegivel_analise_automedicacao,
         v.data,
         SUM(i.quantidade) AS quantidade_total
     FROM public.itens_rel0024 AS i
@@ -83,6 +83,8 @@ SQL_SERIE_DIARIA = text(
         p.cod_tipo,
         p.nom_tipo,
         p.origem_classificacao,
+        p.classificacao_operacional,
+        p.elegivel_analise_automedicacao,
         v.data
     ORDER BY v.filial, p.codigo_produto, v.data
     """
@@ -91,7 +93,8 @@ SQL_SERIE_DIARIA = text(
 SQL_CATALOGO_CLASSIFICACAO = text(
     """
     SELECT filial, codigo_produto, descricao_original,
-           cod_tipo, nom_tipo, origem_classificacao
+           cod_tipo, nom_tipo, origem_classificacao,
+           classificacao_operacional, elegivel_analise_automedicacao
     FROM public.produtos_rel0024
     ORDER BY filial, codigo_produto
     """
@@ -169,13 +172,17 @@ def carregar_agregacao_diaria():
     serie["quantidade_total"] = pd.to_numeric(
         serie["quantidade_total"], errors="coerce"
     )
-    for quadro in (serie, catalogo):
-        quadro["classificacao_operacional"] = quadro["nom_tipo"].map(
-            classificar_tipo_medicamento
+    if catalogo["elegivel_analise_automedicacao"].isna().any():
+        raise ErroDiagnostico(
+            "O catálogo possui produtos sem elegibilidade persistida; "
+            "a análise foi interrompida."
         )
-        quadro["elegivel_analise_automedicacao"] = quadro[
-            "classificacao_operacional"
-        ].map(elegivel_analise_automedicacao)
+    serie["elegivel_analise_automedicacao"] = serie[
+        "elegivel_analise_automedicacao"
+    ].astype(bool)
+    catalogo["elegivel_analise_automedicacao"] = catalogo[
+        "elegivel_analise_automedicacao"
+    ].astype(bool)
     return {
         "banco": banco,
         "somente_leitura": somente_leitura,
