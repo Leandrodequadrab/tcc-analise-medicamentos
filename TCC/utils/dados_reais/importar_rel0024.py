@@ -5,17 +5,22 @@ from collections import Counter, defaultdict
 from pathlib import Path
 import time
 
-from sqlalchemy import create_engine, func, insert, inspect, select, text
+from sqlalchemy import create_engine, func, insert, inspect, select, text, update
 from sqlalchemy.exc import SQLAlchemyError
 
 from database import obter_url_banco_aplicacao
 from models.rel0024 import (
+    CadastroProdutoFarmacia,
     DivergenciaDescricaoRel0024,
     ImportacaoRel0024,
     ItemRel0024,
     ProdutoRel0024,
     TABELAS_REL0024,
     VendaRel0024,
+)
+from utils.classificacao_medicamentos import (
+    SEM_CLASSIFICACAO,
+    classificar_elegibilidade,
 )
 
 from .conexao_farmacia import PASTA_PROJETO
@@ -132,6 +137,24 @@ def _criar_estrutura(engine):
                     "SET soma_valores_liquido = soma_valores"
                 ))
 
+    colunas_produtos = {
+        coluna["name"]
+        for coluna in inspetor.get_columns("produtos_rel0024")
+    }
+    for nome, tipo in {
+        "classificacao_operacional": "VARCHAR(40)",
+        "elegivel_analise_automedicacao": "BOOLEAN",
+    }.items():
+        if nome not in colunas_produtos:
+            with engine.begin() as conexao:
+                _confirmar_destino(conexao)
+                conexao.execute(
+                    text(
+                        "ALTER TABLE public.produtos_rel0024 "
+                        f"ADD COLUMN {nome} {tipo}"
+                    )
+                )
+
 
 def _validar_para_importacao(resultado, validacao):
     problemas = []
@@ -187,13 +210,50 @@ def _vendas_do_arquivo(itens):
 
 def _sincronizar_produtos(conexao, produtos_arquivo):
     tabela = ProdutoRel0024.__table__
+    cadastro = CadastroProdutoFarmacia.__table__
     filiais = sorted({chave[0] for chave in produtos_arquivo})
+    codigos = sorted({codigo for _filial, codigo in produtos_arquivo})
+    metadados_locais = {
+        linha.cod_reduzido: dict(linha._mapping)
+        for linha in conexao.execute(
+            select(cadastro).where(
+                cadastro.c.cod_rede == 1,
+                cadastro.c.cod_reduzido.in_(codigos),
+            )
+        )
+    }
+
+    def preparar_metadados(codigo):
+        local = metadados_locais.get(codigo)
+        tipo = local["cod_tipo"] if local else None
+        nom_tipo = local["nom_tipo"] if local else None
+        if nom_tipo is None or not str(nom_tipo).strip():
+            classificacao, elegivel = SEM_CLASSIFICACAO, False
+        else:
+            classificacao, elegivel = classificar_elegibilidade(nom_tipo)
+        return {
+            "cod_tipo": tipo,
+            "nom_tipo": nom_tipo,
+            "origem_classificacao": (
+                "cadastro_local_sgfpod1|regra_primeiro_token_MED_10D4"
+                if local
+                else None
+            ),
+            "classificacao_operacional": classificacao,
+            "elegivel_analise_automedicacao": elegivel,
+        }
+
     encontrados = conexao.execute(
         select(
             tabela.c.id,
             tabela.c.filial,
             tabela.c.codigo_produto,
             tabela.c.descricao_original,
+            tabela.c.cod_tipo,
+            tabela.c.nom_tipo,
+            tabela.c.origem_classificacao,
+            tabela.c.classificacao_operacional,
+            tabela.c.elegivel_analise_automedicacao,
         ).where(tabela.c.filial.in_(filiais))
     ).mappings()
     existentes = {
@@ -213,11 +273,45 @@ def _sincronizar_produtos(conexao, produtos_arquivo):
                 }
             )
 
+        if atual:
+            esperado = preparar_metadados(chave[1])
+            for campo in (
+                "cod_tipo",
+                "nom_tipo",
+                "classificacao_operacional",
+                "elegivel_analise_automedicacao",
+            ):
+                valor_atual = atual[campo]
+                valor_esperado = esperado[campo]
+                if valor_atual is not None and valor_atual != valor_esperado:
+                    raise ErroImportacaoRel0024(
+                        "Classificação divergente para o produto "
+                        f"(filial={chave[0]}, codigo={chave[1]}), campo "
+                        f"{campo}: banco={valor_atual!r}, "
+                        f"cadastro local={valor_esperado!r}."
+                    )
+            valores = {
+                nome: (
+                    atual[nome]
+                    if atual[nome] is not None
+                    and nome != "origem_classificacao"
+                    else esperado[nome]
+                )
+                for nome in esperado
+            }
+            if any(atual[nome] != valor for nome, valor in valores.items()):
+                conexao.execute(
+                    update(tabela)
+                    .where(tabela.c.id == atual["id"])
+                    .values(**valores)
+                )
+
     novos = [
         {
             "filial": chave[0],
             "codigo_produto": chave[1],
             "descricao_original": descricao,
+            **preparar_metadados(chave[1]),
         }
         for chave, descricao in produtos_arquivo.items()
         if chave not in existentes

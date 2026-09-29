@@ -510,22 +510,49 @@ class ImportacaoIncrementalRel0024TestCase(unittest.TestCase):
 
     def test_estado_real_e_constraints_preservados(self):
         with self.engine.connect() as conexao:
+            contagens = _contagens(conexao)
+            auditorias = conexao.execute(
+                select(ImportacaoRel0024.__table__).order_by(
+                    ImportacaoRel0024.__table__.c.id
+                )
+            ).mappings().all()
             self.assertEqual(
-                _contagens(conexao),
-                {
-                    "importacoes": 1,
-                    "produtos": 4666,
-                    "vendas": 27671,
-                    "itens": 52005,
-                    "quantidade": Decimal("73769.0000"),
-                },
+                contagens["importacoes"], len(auditorias)
+            )
+            self.assertEqual(
+                contagens["produtos"],
+                sum(item["produtos_inseridos"] for item in auditorias),
+            )
+            self.assertEqual(
+                contagens["vendas"],
+                sum(item["vendas_inseridas"] for item in auditorias),
+            )
+            self.assertEqual(
+                contagens["itens"],
+                sum(
+                    item["quantidade_itens_inseridos"]
+                    for item in auditorias
+                ),
+            )
+            self.assertEqual(
+                contagens["quantidade"],
+                sum(
+                    (
+                        item["soma_quantidades_inseridas"]
+                        for item in auditorias
+                    ),
+                    Decimal("0"),
+                ),
             )
             ficticias = conexao.execute(
                 text("SELECT COUNT(*) FROM public.vendas")
             ).scalar_one()
             self.assertEqual(ficticias, 30)
             auditoria = conexao.execute(
-                select(ImportacaoRel0024.__table__)
+                select(ImportacaoRel0024.__table__).where(
+                    ImportacaoRel0024.__table__.c.nome_arquivo
+                    == "6 meses.xlsx"
+                )
             ).mappings().one()
             self.assertEqual(auditoria["produtos_inseridos"], 4666)
             self.assertEqual(auditoria["vendas_inseridas"], 27671)

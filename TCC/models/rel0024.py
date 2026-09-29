@@ -3,7 +3,14 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, UniqueConstraint, func
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Numeric,
+    PrimaryKeyConstraint,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import db
@@ -131,6 +138,12 @@ class ProdutoRel0024(db.Model):
     origem_classificacao: Mapped[str | None] = mapped_column(
         db.String(100), nullable=True
     )
+    classificacao_operacional: Mapped[str | None] = mapped_column(
+        db.String(40), nullable=True
+    )
+    elegivel_analise_automedicacao: Mapped[bool | None] = mapped_column(
+        db.Boolean, nullable=True
+    )
 
     itens: Mapped[list["ItemRel0024"]] = relationship(back_populates="produto")
 
@@ -198,10 +211,34 @@ class ItemRel0024(db.Model):
     importacao: Mapped[ImportacaoRel0024] = relationship(back_populates="itens")
 
 
+class CadastroProdutoFarmacia(db.Model):
+    """Espelho local auditável do cadastro mestre da rede farmacêutica."""
+
+    __tablename__ = "cadastro_produtos_farmacia"
+    __table_args__ = (
+        PrimaryKeyConstraint(
+            "cod_rede", "cod_reduzido", name="pk_cadastro_produtos_farmacia"
+        ),
+    )
+
+    cod_rede: Mapped[int] = mapped_column(nullable=False)
+    cod_reduzido: Mapped[int] = mapped_column(nullable=False)
+    cod_tipo: Mapped[int | None] = mapped_column(nullable=True)
+    nom_tipo: Mapped[str | None] = mapped_column(db.String(100), nullable=True)
+    nom_produto: Mapped[str | None] = mapped_column(db.String(255), nullable=True)
+    flg_ativo: Mapped[str | None] = mapped_column(db.String(1), nullable=True)
+    flg_excluir: Mapped[str | None] = mapped_column(db.String(1), nullable=True)
+    origem: Mapped[str] = mapped_column(db.String(100), nullable=False)
+    sincronizado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 TABELAS_REL0024 = (
     ImportacaoRel0024.__table__,
     DivergenciaDescricaoRel0024.__table__,
     ProdutoRel0024.__table__,
     VendaRel0024.__table__,
     ItemRel0024.__table__,
+    CadastroProdutoFarmacia.__table__,
 )
