@@ -3,137 +3,110 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard de Vendas</title>
-    <link
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
-        rel="stylesheet"
-        integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"
-        crossorigin="anonymous"
-    >
+    <title>Dashboard | Análise de vendas</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 </head>
 <body>
-    <nav class="navbar navbar-dark shadow-sm">
+    <nav class="navbar navbar-expand-lg navbar-dark shadow-sm">
         <div class="container">
-            <a class="navbar-brand fw-semibold" href="{{ url_for('dashboard') }}">
-                Análise de Vendas de Medicamentos
-            </a>
-            <div class="d-flex gap-2">
-                <a class="btn btn-warning btn-sm" href="{{ url_for('analise_ia') }}">
-                    Análise por IA
-                </a>
-                <a class="btn btn-light btn-sm" href="{{ url_for('analises') }}">
-                    Análises
-                </a>
-                <a class="btn btn-outline-light btn-sm" href="{{ url_for('index') }}">
-                    Importar CSV
-                </a>
-                <a class="btn btn-outline-light btn-sm" href="{{ url_for('importar_rel0024_web') }}">
-                    Importar Rel_0024
-                </a>
+            <a class="navbar-brand fw-semibold" href="{{ url_for('dashboard') }}">Análise de Padrões em Vendas de Medicamentos</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navegacao" aria-controls="navegacao" aria-expanded="false" aria-label="Abrir navegação"><span class="navbar-toggler-icon"></span></button>
+            <div class="collapse navbar-collapse" id="navegacao">
+                <div class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
+                    <a class="nav-link active" aria-current="page" href="{{ url_for('dashboard') }}">Dashboard</a>
+                    <a class="nav-link" href="{{ url_for('importar_rel0024_web') }}">Importar Rel_0024</a>
+                    <a class="nav-link" href="{{ url_for('analise_ia') }}">Análise por IA</a>
+                </div>
             </div>
         </div>
     </nav>
 
     <main class="container py-4 py-lg-5">
-        <div class="mb-4">
-            <h1 class="h3 mb-1">Dashboard de vendas</h1>
-            <p class="text-secondary mb-0">
-                Visão geral dos registros armazenados no PostgreSQL.
-            </p>
-        </div>
+        <header class="page-heading mb-4">
+            <span class="eyebrow">TCC · Ciência de Dados</span>
+            <h1 class="display-6 fw-bold mb-2">Análise de Padrões em Vendas de Medicamentos</h1>
+            <p class="text-secondary mb-0">Análise de registros de vendas para resumir tendências e sinalizar comportamentos estatisticamente atípicos.</p>
+        </header>
 
-        {% if indicadores.total_registros == 0 %}
-            <div class="alert alert-info" role="alert">
-                Ainda não existem vendas cadastradas. Importe um CSV para alimentar o dashboard.
-            </div>
-        {% endif %}
+        <section class="pipeline mb-4" aria-label="Fluxo da análise">
+            <span>Rel_0024</span><i aria-hidden="true">→</i><span>PostgreSQL</span><i aria-hidden="true">→</i><span>Classificação operacional</span><i aria-hidden="true">→</i><span>Produtos elegíveis</span><i aria-hidden="true">→</i><span>Modelo C</span>
+        </section>
 
-        <section class="row g-3 mb-4" aria-label="Indicadores gerais">
-            <div class="col-12 col-sm-6 col-xl-3">
-                <article class="card indicador-card h-100 border-0 shadow-sm">
-                    <div class="card-body">
-                        <p class="indicador-titulo">Registros de vendas</p>
-                        <p class="indicador-valor">{{ indicadores.total_registros }}</p>
+        {% if dados.mensagem %}<div class="alert alert-info" role="status">{{ dados.mensagem }}</div>{% endif %}
+
+        <section class="row g-3 mb-4" aria-label="Resumo da base real Rel_0024">
+            <div class="col-6 col-lg-4 col-xxl-2"><article class="card metric-card h-100"><div class="card-body"><p class="metric-label">Período analisado</p><p class="metric-value period-value">{% if dados.indicadores.periodo %}{{ dados.indicadores.periodo.inicial }}<small>até {{ dados.indicadores.periodo.final }}</small>{% else %}—{% endif %}</p></div></article></div>
+            <div class="col-6 col-lg-4 col-xxl-2"><article class="card metric-card h-100"><div class="card-body"><p class="metric-label">Produtos no Rel_0024</p><p class="metric-value">{{ dados.indicadores.produtos }}</p></div></article></div>
+            <div class="col-6 col-lg-4 col-xxl-2"><article class="card metric-card metric-eligible h-100"><div class="card-body"><p class="metric-label">Produtos elegíveis</p><p class="metric-value">{{ dados.indicadores.elegiveis }}</p><small>Tipos MED definidos pela farmácia</small></div></article></div>
+            <div class="col-6 col-lg-4 col-xxl-2"><article class="card metric-card h-100"><div class="card-body"><p class="metric-label">Vendas</p><p class="metric-value">{{ dados.indicadores.vendas }}</p></div></article></div>
+            <div class="col-6 col-lg-4 col-xxl-2"><article class="card metric-card h-100"><div class="card-body"><p class="metric-label">Itens</p><p class="metric-value">{{ dados.indicadores.itens }}</p></div></article></div>
+            <div class="col-6 col-lg-4 col-xxl-2"><article class="card metric-card h-100"><div class="card-body"><p class="metric-label">Unidades vendidas</p><p class="metric-value">{{ dados.indicadores.unidades }}</p></div></article></div>
+        </section>
+
+        <section class="row g-4 mb-4" aria-label="Visões descritivas da base real">
+            <div class="col-12 col-xl-5">
+                <article class="card panel-card h-100">
+                    <div class="card-body p-4">
+                        <h2 class="h5">Classificação operacional dos produtos</h2>
+                        <p class="text-secondary small">Somente MED_OUTRO, MED_OTC_INTERNO e MED_ANTIMICROBIANO são elegíveis atualmente para o Modelo C. OTC interno não representa confirmação regulatória de MIP.</p>
+                        <div class="chart-container"><canvas id="grafico-classificacoes" aria-label="Distribuição de produtos por classificação operacional"></canvas></div>
+                        <div class="small text-secondary mt-2">Categorias elegíveis: {{ dados.classificacoes.elegiveis | join(', ') }}.</div>
                     </div>
                 </article>
             </div>
-            <div class="col-12 col-sm-6 col-xl-3">
-                <article class="card indicador-card h-100 border-0 shadow-sm">
-                    <div class="card-body">
-                        <p class="indicador-titulo">Medicamentos diferentes</p>
-                        <p class="indicador-valor">{{ indicadores.medicamentos }}</p>
-                    </div>
-                </article>
-            </div>
-            <div class="col-12 col-sm-6 col-xl-3">
-                <article class="card indicador-card h-100 border-0 shadow-sm">
-                    <div class="card-body">
-                        <p class="indicador-titulo">Categorias</p>
-                        <p class="indicador-valor">{{ indicadores.categorias }}</p>
-                    </div>
-                </article>
-            </div>
-            <div class="col-12 col-sm-6 col-xl-3">
-                <article class="card indicador-card h-100 border-0 shadow-sm">
-                    <div class="card-body">
-                        <p class="indicador-titulo">Cidades</p>
-                        <p class="indicador-valor">{{ indicadores.cidades }}</p>
+            <div class="col-12 col-xl-7">
+                <article class="card panel-card h-100">
+                    <div class="card-body p-4">
+                        <h2 class="h5">Unidades vendidas por mês</h2>
+                        <p class="text-secondary small">Soma de quantidade dos itens ligados às vendas do Rel_0024.</p>
+                        <div class="chart-container"><canvas id="grafico-vendas-mensais" aria-label="Evolução mensal das unidades vendidas"></canvas></div>
                     </div>
                 </article>
             </div>
         </section>
 
-        <section class="row g-4" aria-label="Gráficos de vendas">
-            <div class="col-12 col-xl-6">
-                <article class="card chart-card h-100 border-0 shadow-sm">
-                    <div class="card-body">
-                        <h2 class="h5">Medicamentos mais vendidos</h2>
-                        <p class="text-secondary small">Soma das unidades vendidas por medicamento.</p>
-                        <div class="chart-container">
-                            <canvas id="grafico-medicamentos"></canvas>
-                        </div>
-                    </div>
-                </article>
-            </div>
-            <div class="col-12 col-xl-6">
-                <article class="card chart-card h-100 border-0 shadow-sm">
-                    <div class="card-body">
-                        <h2 class="h5">Vendas por categoria</h2>
-                        <p class="text-secondary small">Soma das unidades vendidas por categoria.</p>
-                        <div class="chart-container">
-                            <canvas id="grafico-categorias"></canvas>
-                        </div>
-                    </div>
-                </article>
-            </div>
-            <div class="col-12 col-xl-6">
-                <article class="card chart-card h-100 border-0 shadow-sm">
-                    <div class="card-body">
-                        <h2 class="h5">Vendas ao longo do tempo</h2>
-                        <p class="text-secondary small">Soma das unidades vendidas em cada data.</p>
-                        <div class="chart-container">
-                            <canvas id="grafico-tempo"></canvas>
-                        </div>
-                    </div>
-                </article>
-            </div>
-            <div class="col-12 col-xl-6">
-                <article class="card chart-card h-100 border-0 shadow-sm">
-                    <div class="card-body">
-                        <h2 class="h5">Vendas por cidade</h2>
-                        <p class="text-secondary small">Soma das unidades vendidas em cada cidade.</p>
-                        <div class="chart-container">
-                            <canvas id="grafico-cidades"></canvas>
-                        </div>
-                    </div>
-                </article>
+        <section class="card panel-card mb-4">
+            <div class="card-body p-4">
+                <div class="mb-3"><h2 class="h5 mb-1">10 produtos elegíveis com maior quantidade vendida</h2><p class="text-secondary small mb-0">A ordenação considera a soma de unidades no período; produtos não elegíveis não entram nesta lista.</p></div>
+                <div class="table-responsive"><table class="table table-hover align-middle mb-0">
+                    <thead><tr><th>Código</th><th>Descrição</th><th>Classificação operacional</th><th class="text-end">Quantidade</th></tr></thead>
+                    <tbody>
+                        {% for produto in dados.produtos_mais_vendidos %}<tr><td>{{ produto.codigo }}</td><td class="product-description">{{ produto.descricao }}</td><td><span class="badge text-bg-light border">{{ produto.classificacao }}</span></td><td class="text-end fw-semibold">{{ produto.quantidade }}</td></tr>
+                        {% else %}<tr><td colspan="4" class="text-center text-secondary py-4">Nenhum produto elegível com vendas disponível.</td></tr>{% endfor %}
+                    </tbody>
+                </table></div>
             </div>
         </section>
+
+        <section class="card panel-card mb-4" id="resumo-ia" data-endpoint="{{ url_for('api_dashboard_resumo_ia') }}">
+            <div class="card-body p-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                    <div><span class="eyebrow">Isolation Forest · Modelo C</span><h2 class="h4 mt-1 mb-1">Análise por Inteligência Artificial</h2><p class="text-secondary mb-0">O modelo compara o comportamento diário de cada produto com o próprio histórico para sinalizar observações atípicas.</p></div>
+                    <a class="btn btn-primary" href="{{ url_for('analise_ia') }}">Ver análise detalhada</a>
+                </div>
+                <div id="ia-estado" class="alert alert-light border" role="status" aria-live="polite"><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Analisando dados…</div>
+                <div id="ia-conteudo" hidden>
+                    <div class="row g-3 mb-4" id="ia-metricas">
+                        <div class="col-6 col-lg-3"><article class="ia-metric"><p>Produtos modeláveis</p><strong data-metrica="produtos_modelaveis">—</strong></article></div>
+                        <div class="col-6 col-lg-3"><article class="ia-metric"><p>Observações avaliadas</p><strong data-metrica="observacoes_avaliadas">—</strong></article></div>
+                        <div class="col-6 col-lg-3"><article class="ia-metric"><p>Outliers gerais</p><strong><span data-metrica="outliers">—</span><small data-metrica-percentual="outliers_percentual"></small></strong></article></div>
+                        <div class="col-6 col-lg-3"><article class="ia-metric ia-metric-highlight"><p>Aumentos atípicos</p><strong><span data-metrica="aumentos_atipicos">—</span><small data-metrica-percentual="aumentos_percentual"></small></strong></article></div>
+                    </div>
+                    <div class="row g-4">
+                        <div class="col-12 col-xl-6"><h3 class="h6">Aumentos atípicos por mês</h3><div class="chart-container chart-container-short"><canvas id="grafico-aumentos-mensais" aria-label="Aumentos atípicos do Modelo C por mês"></canvas></div><p class="text-secondary small mb-0 mt-2">Os primeiros períodos podem ter menos observações avaliáveis devido à necessidade de histórico anterior.</p></div>
+                        <div class="col-12 col-xl-6"><h3 class="h6">Aumentos atípicos em destaque</h3><div class="table-responsive"><table class="table table-sm table-hover align-middle"><thead><tr><th>Data</th><th>Código</th><th>Produto</th><th>Classificação</th><th class="text-end">Qtd.</th><th class="text-end">Média histórica</th><th class="text-end">Score</th></tr></thead><tbody id="ia-destaques"><tr><td colspan="7" class="text-center text-secondary">Carregando…</td></tr></tbody></table></div><p class="text-secondary small mb-0">Ordenação pelo menor <code>score_samples</code>; scores menores indicam comportamento mais atípico no modelo.</p></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <aside class="interpretation-note" role="note"><strong>Interpretação:</strong> os resultados representam comportamentos estatisticamente atípicos nas vendas e não determinam, isoladamente, sua causa. Promoções, preço, estoque, reposição, sazonalidade e mudanças de demanda podem influenciar os padrões observados. A análise não diagnostica doenças, surtos ou automedicação.</aside>
     </main>
 
-    <script id="dashboard-data" type="application/json">{{ graficos | tojson }}</script>
+    <script id="dashboard-data" type="application/json">{{ dados | tojson }}</script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </body>
 </html>

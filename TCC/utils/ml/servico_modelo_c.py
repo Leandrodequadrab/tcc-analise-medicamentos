@@ -356,8 +356,20 @@ def executar_analise_ia(
         for chave, valor in filtros.items()
     }
     total_aumentos = int(resultados["aumento_atipico"].sum())
+    serie_aumentos = resultados.loc[resultados["aumento_atipico"]].copy()
+    serie_aumentos["mes"] = serie_aumentos["data"].dt.to_period("M")
+    totais_aumentos_mensais = serie_aumentos.groupby("mes").size()
+    meses = pd.period_range(
+        periodo_origem["data_inicial"].strftime("%Y-%m"),
+        periodo_origem["data_final"].strftime("%Y-%m"),
+        freq="M",
+    )
     return {
         "metricas": metricas,
+        "aumentos_por_mes": {
+            "labels": [mes.strftime("%Y-%m") for mes in meses],
+            "valores": [int(totais_aumentos_mensais.get(mes, 0)) for mes in meses],
+        },
         "filtros": filtros_exibicao,
         "filiais_disponiveis": sorted(
             int(valor) for valor in catalogo["filial"].unique()

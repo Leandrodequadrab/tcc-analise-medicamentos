@@ -1,12 +1,16 @@
 from pathlib import Path
 
-from flask import Flask, render_template, request
+from flask import Flask, jsonify, render_template, request
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from database import db, inicializar_banco, obter_url_banco_aplicacao
 from utils.analises import obter_analises
-from utils.dashboard import obter_dados_dashboard
+from utils.dashboard import (
+    criar_dashboard_vazio,
+    obter_dados_dashboard,
+    obter_resumo_ia_dashboard,
+)
 from utils.importar_csv import ErroValidacaoCSV, importar_vendas_csv
 from utils.dados_reais.importar_rel0024 import ErroImportacaoRel0024
 from utils.dados_reais.servico_upload_rel0024 import (
@@ -34,12 +38,43 @@ def index():
 
 @app.route("/dashboard")
 def dashboard():
-    dados = obter_dados_dashboard()
-    return render_template(
-        "dashboard.html",
-        indicadores=dados["indicadores"],
-        graficos=dados["graficos"],
-    )
+    try:
+        dados = obter_dados_dashboard()
+    except SQLAlchemyError:
+        app.logger.exception("Falha ao consultar as tabelas do Rel_0024 para o dashboard")
+        dados = criar_dashboard_vazio(
+            "Não foi possível consultar os dados Rel_0024. Verifique a conexão com o banco."
+        )
+    return render_template("dashboard.html", dados=dados)
+
+
+@app.get("/api/dashboard/resumo-ia")
+def api_dashboard_resumo_ia():
+    """Carrega o resumo do Modelo C após a renderização descritiva do dashboard."""
+
+    try:
+        return jsonify(obter_resumo_ia_dashboard())
+    except ErroAnaliseIA as erro:
+        return jsonify({"disponivel": False, "mensagem": str(erro)}), erro.status_http
+    except (ErroDiagnostico, ErroModelo, SQLAlchemyError):
+        app.logger.exception("Falha ao executar o resumo do Modelo C no dashboard")
+        return jsonify(
+            {
+                "disponivel": False,
+                "mensagem": (
+                    "Não foi possível carregar o resumo da análise por IA. "
+                    "Confira se há dados Rel_0024 disponíveis."
+                ),
+            }
+        ), 503
+    except Exception:
+        app.logger.exception("Erro inesperado ao montar o resumo do Modelo C")
+        return jsonify(
+            {
+                "disponivel": False,
+                "mensagem": "O resumo da análise por IA não pôde ser carregado.",
+            }
+        ), 503
 
 
 @app.route("/analises")
