@@ -10,7 +10,7 @@ from openpyxl import Workbook
 from sqlalchemy import create_engine, func, inspect, select, text
 
 from app import app
-from database import obter_url_banco_aplicacao
+from database import db, obter_url_banco_aplicacao
 from models.rel0024 import (
     DivergenciaDescricaoRel0024,
     ImportacaoRel0024,
@@ -25,6 +25,14 @@ from utils.dados_reais.importar_rel0024 import (
     importar_rel0024,
 )
 from utils.dados_reais.validar_rel0024 import ler_rel0024, validar_rel0024
+
+
+def tearDownModule():
+    """Fecha o pool Flask aberto ao importar app nesta suíte de integração."""
+
+    with app.app_context():
+        db.session.remove()
+        db.engine.dispose()
 
 
 def _linha_movimento(
