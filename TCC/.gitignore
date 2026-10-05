@@ -25,3 +25,5 @@ Thumbs.db
 /dados/*.xlsx
 /dados_reais/
 uploads/
+
+dados/cadastro_dcb_farmacia.csv
