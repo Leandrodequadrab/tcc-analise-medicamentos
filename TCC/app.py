@@ -17,6 +17,10 @@ from utils.dados_reais.servico_upload_rel0024 import (
     preparar_resultado_web,
     processar_upload_rel0024,
 )
+from utils.dados_reais.servico_nova_analise import (
+    ErroNovaAnalise,
+    analisar_upload_rel0024,
+)
 from utils.dados_reais.validar_rel0024 import ErroRel0024
 from utils.ml.comparar_modelos_relativos import ErroModelo
 from utils.ml.diagnosticar_series import ErroDiagnostico
@@ -127,6 +131,46 @@ def analise_ia():
     )
 
 
+@app.route("/nova-analise", methods=["GET", "POST"])
+def nova_analise():
+    if request.method == "GET":
+        return render_template("nova_analise.html", resultado=None, erro=None)
+
+    try:
+        resultado = analisar_upload_rel0024(request.files.get("arquivo"))
+    except ErroNovaAnalise as erro:
+        return render_template(
+            "nova_analise.html", resultado=None, erro=str(erro)
+        ), erro.status_http
+    except ErroRel0024 as erro:
+        return render_template(
+            "nova_analise.html",
+            resultado=None,
+            erro=f"Relatório inválido: {erro}",
+        ), 400
+    except (ErroDiagnostico, ErroModelo, SQLAlchemyError):
+        app.logger.exception("Falha ao executar análise Rel_0024 independente")
+        return render_template(
+            "nova_analise.html",
+            resultado=None,
+            erro=(
+                "Não foi possível consultar o catálogo local ou executar o modelo. "
+                "Nenhum dado de venda foi salvo."
+            ),
+        ), 503
+    except Exception:
+        app.logger.exception("Erro inesperado na análise Rel_0024 independente")
+        return render_template(
+            "nova_analise.html",
+            resultado=None,
+            erro="O arquivo não pôde ser analisado. Nenhum dado foi salvo.",
+        ), 500
+
+    return render_template(
+        "nova_analise.html", resultado=resultado, erro=None
+    )
+
+
 @app.post("/importar")
 def importar_csv():
     if "arquivo" not in request.files:
@@ -210,6 +254,12 @@ def importar_rel0024_web():
 
 @app.errorhandler(413)
 def arquivo_muito_grande(_erro):
+    if request.path.startswith("/nova-analise"):
+        return render_template(
+            "nova_analise.html",
+            resultado=None,
+            erro="O arquivo ultrapassa o limite permitido de 50 MB.",
+        ), 413
     if request.path.startswith("/importar-rel0024"):
         return render_template(
             "importar_rel0024.html",

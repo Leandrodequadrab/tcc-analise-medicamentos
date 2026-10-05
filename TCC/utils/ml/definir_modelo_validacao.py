@@ -208,11 +208,33 @@ def executar_modelo_c(apenas_elegiveis_automedicacao=False):
     diagnostico = diagnosticar_series(
         apenas_elegiveis_automedicacao=apenas_elegiveis_automedicacao
     )
-    preparo = preparar_observacoes_modelo(diagnostico)
+    return executar_modelo_c_em_diagnostico(diagnostico)
+
+
+def executar_modelo_c_em_diagnostico(
+    diagnostico, *, permitir_historico_insuficiente=False
+):
+    """Executa o nÃºcleo congelado sobre uma fonte jÃ¡ preparada em memÃ³ria."""
+
+    preparo = preparar_observacoes_modelo(
+        diagnostico,
+        permitir_vazio=permitir_historico_insuficiente,
+    )
+    serie_contexto = calcular_historico_positivo(preparo["serie_features"])
+    if preparo["observacoes"].empty:
+        if not permitir_historico_insuficiente:
+            raise ErroModelo("Nenhuma observaÃ§Ã£o atende aos critÃ©rios do modelo.")
+        return {
+            "diagnostico": diagnostico,
+            "preparo": preparo,
+            "modelo": None,
+            "resultado": preparo["observacoes"].copy(),
+            "serie_contexto": serie_contexto,
+        }
+
     observacoes_relativas, _diagnostico_mad = adicionar_features_relativas(
         preparo
     )
-    serie_contexto = calcular_historico_positivo(preparo["serie_features"])
     observacoes_historicas = _adicionar_historico_positivo(
         {
             "preparo": preparo,

@@ -6,19 +6,13 @@
     <title>Dashboard | Análise de vendas</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark shadow-sm">
+    <nav class="navbar navbar-expand-lg navbar-dark app-navbar">
         <div class="container">
             <a class="navbar-brand fw-semibold" href="{{ url_for('dashboard') }}">Análise de Padrões em Vendas de Medicamentos</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navegacao" aria-controls="navegacao" aria-expanded="false" aria-label="Abrir navegação"><span class="navbar-toggler-icon"></span></button>
-            <div class="collapse navbar-collapse" id="navegacao">
-                <div class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
-                    <a class="nav-link active" aria-current="page" href="{{ url_for('dashboard') }}">Dashboard</a>
-                    <a class="nav-link" href="{{ url_for('importar_rel0024_web') }}">Importar Rel_0024</a>
-                    <a class="nav-link" href="{{ url_for('analise_ia') }}">Análise por IA</a>
-                </div>
-            </div>
+            <a class="btn nav-primary ms-auto" href="{{ url_for('nova_analise') }}">Nova análise</a>
         </div>
     </nav>
 

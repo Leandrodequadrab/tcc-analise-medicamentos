@@ -109,7 +109,7 @@ def _adicionar_features_historicas(serie_completa):
     return serie
 
 
-def preparar_observacoes_modelo(diagnostico):
+def preparar_observacoes_modelo(diagnostico, *, permitir_vazio=False):
     """Aplica elegibilidade e devolve somente dias positivos modeláveis."""
 
     resumo_produtos = diagnostico["resumo_produtos"].copy()
@@ -142,7 +142,7 @@ def preparar_observacoes_modelo(diagnostico):
     linhas_modelaveis = ~media_zero & linhas_finitas
     observacoes = candidatos.loc[linhas_modelaveis].copy()
 
-    if observacoes.empty:
+    if observacoes.empty and not permitir_vazio:
         raise ErroModelo("Nenhuma observação atende aos critérios do modelo.")
     if observacoes.duplicated(["filial", "codigo_produto", "data"]).any():
         raise ErroModelo("Foram encontradas observações produto-dia duplicadas.")

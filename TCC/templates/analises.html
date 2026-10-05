@@ -11,15 +11,13 @@
         crossorigin="anonymous"
     >
     <link rel="stylesheet" href="{{ url_for('static', filename='css/analises.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
 <body>
-    <nav class="navbar navbar-dark shadow-sm">
+    <nav class="navbar navbar-dark app-navbar">
         <div class="container">
-            <a class="navbar-brand fw-semibold" href="{{ url_for('analises') }}">Análises</a>
-            <div class="d-flex gap-2">
-                <a class="btn btn-light btn-sm" href="{{ url_for('dashboard') }}">Dashboard</a>
-                <a class="btn btn-outline-light btn-sm" href="{{ url_for('index') }}">Importar CSV</a>
-            </div>
+            <a class="navbar-brand fw-semibold" href="{{ url_for('dashboard') }}">Análise de Padrões em Vendas de Medicamentos</a>
+            <a class="btn nav-primary ms-auto" href="{{ url_for('nova_analise') }}">Nova análise</a>
         </div>
     </nav>
 

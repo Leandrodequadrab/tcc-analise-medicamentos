@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Analise um relatório Rel_0024 sem importar dados para a base consolidada.">
+    <title>Nova análise | Análise de vendas de medicamentos</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/analise_ia.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark app-navbar">
+        <div class="container">
+            <a class="navbar-brand fw-semibold" href="{{ url_for('dashboard') }}">Análise de Padrões em Vendas de Medicamentos</a>
+        </div>
+    </nav>
+
+    <main class="container py-4 py-lg-5">
+        <header class="page-header mb-4">
+            <span class="section-kicker">Nova análise</span>
+            <h1 class="h2 fw-bold mt-2 mb-2">Análise de vendas de medicamentos</h1>
+            <p class="text-secondary mb-0">Analise registros de vendas e identifique comportamentos atípicos ao longo do tempo.</p>
+        </header>
+
+        <section class="card app-panel mb-4" aria-labelledby="titulo-envio">
+            <div class="card-body p-3 p-md-4">
+                <h2 id="titulo-envio" class="h5 mb-1">Selecione seu relatório</h2>
+                <p class="text-secondary small mb-3">Cada relatório é analisado individualmente utilizando apenas o histórico contido no próprio arquivo.</p>
+                <form id="form-nova-analise" method="post" action="{{ url_for('nova_analise') }}" enctype="multipart/form-data">
+                    <label class="form-label fw-semibold" for="arquivo-rel0024">Relatório de vendas</label>
+                    <div class="app-upload-zone">
+                        <input class="form-control" id="arquivo-rel0024" name="arquivo" type="file" accept=".xlsx,.xls" aria-describedby="ajuda-arquivo" required>
+                        <div class="form-text mt-2" id="ajuda-arquivo">Selecione um relatório Rel_0024 em formato XLS ou XLSX.</div>
+                        <div class="d-flex flex-wrap align-items-center gap-3 mt-4">
+                            <button id="botao-analisar-arquivo" class="btn btn-primary btn-lg px-4" type="submit">Analisar</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        {% if erro %}
+            <div class="alert alert-danger" role="alert">
+                <strong>Não foi possível analisar este arquivo.</strong>
+                <p class="mb-0">Verifique se o relatório selecionado corresponde ao formato Rel_0024 e tente novamente.</p>
+                <details class="mt-2"><summary class="small">Detalhes da validação</summary><p class="small mt-2 mb-0">{{ erro }}</p></details>
+            </div>
+        {% endif %}
+
+        {% if resultado %}
+            <section aria-labelledby="titulo-resultado" class="mb-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                    <div>
+                        <span class="app-eyebrow">Resultado da análise</span>
+                        <h2 id="titulo-resultado" class="h4 mt-1 mb-1">Arquivo processado com sucesso</h2>
+                        <p class="text-secondary mb-0 app-file-name"><strong>{{ resultado.arquivo }}</strong> <span aria-hidden="true">·</span> Filial {{ resultado.filial }} <span aria-hidden="true">·</span> {{ resultado.periodo.inicial }} a {{ resultado.periodo.final }}</p>
+                    </div>
+                    <a class="btn btn-outline-secondary" href="#form-nova-analise">Analisar outro arquivo</a>
+                </div>
+
+                {% if resultado.mensagem_historico %}
+                    <div class="alert alert-warning" role="status"><strong>Histórico insuficiente</strong><p class="mb-0">Não houve histórico suficiente para executar a análise neste período. O arquivo foi processado e os dados descritivos continuam disponíveis abaixo.</p></div>
+                {% endif %}
+
+                <div class="row g-3 mb-4" aria-label="Indicadores principais">
+                    <div class="col-12 col-md-4"><article class="app-metric"><p class="app-metric-label">Produtos identificados</p><p class="app-metric-value">{{ resultado.metricas.produtos_encontrados }}</p></article></div>
+                    <div class="col-12 col-md-4"><article class="app-metric"><p class="app-metric-label">Produtos analisados</p><p class="app-metric-value">{{ resultado.metricas.produtos_modelaveis }}</p><small class="text-secondary">Com histórico suficiente para o modelo</small></article></div>
+                    <div class="col-12 col-md-4"><article class="app-metric app-metric-highlight"><p class="app-metric-label">Aumentos atípicos</p><p class="app-metric-value">{{ resultado.metricas.aumentos_atipicos }}</p></article></div>
+                </div>
+
+                <aside class="app-note mb-4" role="note">Os resultados representam comportamentos estatisticamente atípicos nas vendas e devem ser interpretados como sinais para investigação. Fatores comerciais, sazonais, operacionais e externos também podem influenciar as vendas.</aside>
+            </section>
+
+            <section class="card app-panel mb-4" aria-labelledby="titulo-grafico-principal">
+                <div class="card-body p-3 p-md-4">
+                    <h2 id="titulo-grafico-principal" class="h5">Aumentos atípicos ao longo do período</h2>
+                    <p class="text-secondary small">Quantidade de aumentos atípicos identificados em cada mês.</p>
+                    <div class="app-chart"><canvas id="grafico-aumentos-mensais-independentes" role="img" aria-label="Gráfico mensal de aumentos atípicos"></canvas></div>
+                </div>
+            </section>
+
+            <section class="card app-panel mb-4" aria-labelledby="titulo-ocorrencias">
+                <div class="card-body p-3 p-md-4">
+                    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+                        <div><h2 id="titulo-ocorrencias" class="h5 mb-1">Principais aumentos atípicos</h2><p class="text-secondary small mb-0">A quantidade observada é comparada com a média histórica do próprio produto.</p></div>
+                        {% if resultado.aumentos_limitados %}<span class="badge text-bg-light border">Exibição limitada aos 100 principais</span>{% endif %}
+                    </div>
+                    {% if resultado.aumentos %}
+                        <div id="filtros-aumentos" class="row g-2 align-items-end mb-3" data-total-original="{{ resultado.metricas.aumentos_atipicos }}" data-resultados-carregados="{{ resultado.aumentos|length }}" aria-label="Filtros das ocorrências">
+                            <div class="col-12 col-md-6 col-xl-3"><label class="form-label small mb-1" for="busca-aumentos">Produto ou código</label><input class="form-control form-control-sm" type="search" id="busca-aumentos" placeholder="Buscar por nome ou código"></div>
+                            <div class="col-12 col-sm-6 col-md-3 col-xl-2"><label class="form-label small mb-1" for="classificacao-aumentos">Classificação</label><select class="form-select form-select-sm" id="classificacao-aumentos"><option value="">Todas</option></select></div>
+                            <div class="col-6 col-md-3 col-xl-2"><label class="form-label small mb-1" for="data-inicial-aumentos">Data inicial</label><input class="form-control form-control-sm" type="date" id="data-inicial-aumentos"></div>
+                            <div class="col-6 col-md-3 col-xl-2"><label class="form-label small mb-1" for="data-final-aumentos">Data final</label><input class="form-control form-control-sm" type="date" id="data-final-aumentos"></div>
+                            <div class="col-12 col-sm-6 col-md-4 col-xl-2"><label class="form-label small mb-1" for="ordenacao-aumentos">Ordenar por</label><select class="form-select form-select-sm" id="ordenacao-aumentos"><option value="maior-aumento">Maior aumento</option><option value="mais-recente">Mais recente</option><option value="mais-antigo">Mais antigo</option></select></div>
+                            <div class="col-6 col-sm-3 col-md-2 col-xl-1"><label class="form-label small mb-1" for="itens-pagina-aumentos">Por página</label><select class="form-select form-select-sm" id="itens-pagina-aumentos"><option value="10" selected>10</option><option value="25">25</option><option value="50">50</option></select></div>
+                            <div class="col-6 col-md-auto"><button class="btn btn-sm btn-outline-secondary" type="button" id="limpar-filtros-aumentos">Limpar filtros</button></div>
+                        </div>
+                        <p id="estado-filtros-aumentos" class="small text-secondary mb-2" role="status" aria-live="polite"></p>
+                        <div class="table-responsive"><table class="table table-hover align-middle mb-0" id="tabela-aumentos">
+                            <thead><tr><th scope="col">Data</th><th scope="col">Produto</th><th scope="col" class="text-end">Quantidade</th><th scope="col" class="text-end">Média histórica</th><th scope="col">Classificação</th><th scope="col">Informação técnica</th></tr></thead>
+                            <tbody id="linhas-aumentos">{% for item in resultado.aumentos %}<tr data-date="{{ item.data }}" data-product="{{ item.produto|lower }}" data-code="{{ item.codigo_produto }}" data-classification="{{ item.classificacao }}" data-quantity="{{ item.quantidade }}" data-difference="{{ item.diferenca }}">
+                                <td class="text-nowrap">{{ item.data }}</td>
+                                <td class="product-name"><span class="d-block fw-semibold">{{ item.produto }}</span><small class="text-secondary">Código {{ item.codigo_produto }}</small></td>
+                                <td class="text-end fw-semibold">{{ '%.2f'|format(item.quantidade) }}</td>
+                                <td class="text-end">{{ '%.2f'|format(item.media_historica) }}</td>
+                                <td><span class="badge text-bg-light border">Aumento atípico</span></td>
+                                <td><details class="app-score-details"><summary>Ver detalhes</summary><div class="mt-1">Tipo: {{ item.classificacao }}<br>Diferença: {{ '%.2f'|format(item.diferenca) }}<br>Score: {{ '%.5f'|format(item.score_samples) }}<br>Decisão: {{ '%.5f'|format(item.decision_function) }}</div></details></td>
+                            </tr>{% endfor %}</tbody>
+                        </table></div>
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="pagina-anterior-aumentos">Anterior</button>
+                            <span id="pagina-atual-aumentos" class="small text-secondary" aria-live="polite"></span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="proxima-pagina-aumentos">Próxima</button>
+                        </div>
+                    {% else %}<div class="empty-chart p-4 text-center text-secondary">Nenhum aumento atípico foi encontrado neste arquivo.</div>{% endif %}
+                </div>
+            </section>
+
+            <details class="card app-panel app-details mb-4">
+                <summary class="card-body px-3 px-md-4">Ver detalhes da análise</summary>
+                <div class="card-body pt-0 px-3 px-md-4">
+                    <h3 class="h6">Resumo complementar</h3>
+                    <div class="table-responsive mb-4"><table class="table table-sm align-middle">
+                        <caption class="visually-hidden">Métricas complementares da análise</caption>
+                        <tbody>
+                            <tr><th scope="row">Produtos elegíveis</th><td>{{ resultado.metricas.produtos_elegiveis }}</td><th scope="row">Produtos inelegíveis</th><td>{{ resultado.metricas.produtos_inelegiveis }}</td></tr>
+                            <tr><th scope="row">Histórico insuficiente</th><td>{{ resultado.metricas.historico_insuficiente }}</td><th scope="row">Observações avaliadas</th><td>{{ resultado.metricas.observacoes_avaliadas }}</td></tr>
+                            <tr><th scope="row">Outliers do modelo</th><td>{{ resultado.metricas.outliers }}{% if resultado.metricas.outliers_percentual is not none %} ({{ resultado.metricas.outliers_percentual }}%){% endif %}</td><th scope="row">Aumentos atípicos</th><td>{{ resultado.metricas.aumentos_atipicos }}{% if resultado.metricas.aumentos_percentual is not none %} ({{ resultado.metricas.aumentos_percentual }}%){% endif %}</td></tr>
+                            <tr><th scope="row">Linhas de Venda</th><td>{{ resultado.metricas.linhas_venda }}</td><th scope="row">Devoluções ignoradas na série</th><td>{{ resultado.metricas.linhas_devolucao_ignoradas }}</td></tr>
+                        </tbody>
+                    </table></div>
+                    <h3 class="h6">Outras visualizações</h3>
+                    <div class="row g-4">
+                        <div class="col-12 col-xl-8"><h4 class="h6">Unidades vendidas por dia</h4><div class="app-chart app-chart-secondary"><canvas id="grafico-vendas-independentes" role="img" aria-label="Unidades vendidas por dia no arquivo selecionado"></canvas></div></div>
+                        <div class="col-12 col-xl-4"><h4 class="h6">Produtos por classificação operacional</h4><div class="app-chart app-chart-secondary"><canvas id="grafico-classificacoes-independentes" role="img" aria-label="Distribuição de produtos por classificação operacional"></canvas></div></div>
+                    </div>
+                    <hr>
+                    <h3 class="h6">Como interpretar</h3>
+                    <p class="small text-secondary">A classificação operacional usa o tipo cadastral local. Ela não confirma enquadramento regulatório, diagnóstico, doença, surto ou automedicação. As séries e o histórico são construídos somente com datas deste arquivo; nenhuma venda consolidada ou análise anterior é utilizada. Devoluções participam da validação estrutural do relatório, mas não entram nas séries de venda.</p>
+                    <details><summary class="small">Metadados do processamento</summary><p class="small text-secondary mt-2 mb-0">SHA-256 do arquivo: <code>{{ resultado.sha256 }}</code>. Resultados calculados em memória e não persistidos.</p></details>
+                </div>
+            </details>
+        {% endif %}
+
+        <div class="app-processing loading-overlay" id="estado-processamento" aria-live="polite" aria-hidden="true">
+            <div class="loading-card text-center shadow" role="status"><div class="app-spinner mx-auto mb-3" aria-hidden="true"></div><h2 class="h5">Analisando relatório…</h2><p class="text-secondary mb-0">Os dados estão sendo organizados e analisados. Isso pode levar alguns segundos.</p></div>
+        </div>
+    </main>
+
+    <footer class="container pb-4 small text-secondary">Projeto acadêmico · Análise de padrões em vendas de medicamentos · resultados requerem avaliação contextual.</footer>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+    {% if resultado %}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
+    <script>
+        const dadosAnalise = {{ resultado.graficos|tojson }};
+        const dadosClassificacao = {{ resultado.classificacoes|tojson }};
+        const corPrincipal = '#176b4d';
+        new Chart(document.getElementById('grafico-aumentos-mensais-independentes'), {
+            type: 'bar', data: { labels: dadosAnalise.aumentos_mensais.labels, datasets: [{ label: 'Aumentos atípicos', data: dadosAnalise.aumentos_mensais.valores, backgroundColor: corPrincipal, borderRadius: 4, maxBarThickness: 48 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+        });
+        new Chart(document.getElementById('grafico-vendas-independentes'), {
+            type: 'line', data: { labels: dadosAnalise.vendas_temporais.labels, datasets: [{ label: 'Unidades vendidas', data: dadosAnalise.vendas_temporais.valores, borderColor: corPrincipal, backgroundColor: 'rgba(23,107,77,.10)', fill: true, tension: .2, pointRadius: 0 }] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+        });
+        new Chart(document.getElementById('grafico-classificacoes-independentes'), {
+            type: 'doughnut', data: { labels: dadosClassificacao.labels, datasets: [{ data: dadosClassificacao.valores, backgroundColor: ['#176b4d','#4f9071','#8ab49e','#c4d9cc','#aab8b0','#d6ddd9'], borderColor: '#fff', borderWidth: 2 }] },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    </script>
+    {% endif %}
+    <script src="{{ url_for('static', filename='js/nova_analise.js') }}"></script>
+</body>
+</html>
