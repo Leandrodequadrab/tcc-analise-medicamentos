@@ -47,17 +47,19 @@ class ErroModelo(RuntimeError):
     """Indica que o pipeline não pode prosseguir de maneira confiável."""
 
 
-def _adicionar_features_historicas(serie_completa):
+def _adicionar_features_historicas(
+    serie_completa, chaves_serie=("filial", "codigo_produto")
+):
     """Calcula features usando shift(1), sem incluir o dia corrente."""
 
+    chaves_serie = list(chaves_serie)
     serie = serie_completa.copy().sort_values(
-        ["filial", "codigo_produto", "data"], kind="stable"
+        [*chaves_serie, "data"], kind="stable"
     )
     serie["quantidade_dia"] = pd.to_numeric(
         serie["quantidade_total"], errors="coerce"
     )
-    chaves = [serie["filial"], serie["codigo_produto"]]
-    agrupado = serie.groupby(["filial", "codigo_produto"], sort=False)
+    agrupado = serie.groupby(chaves_serie, sort=False, dropna=False)
 
     serie["dias_historico"] = agrupado.cumcount()
     serie["log1p_quantidade_dia"] = np.log1p(serie["quantidade_dia"])
@@ -78,23 +80,22 @@ def _adicionar_features_historicas(serie_completa):
     )
 
     venda_no_dia = serie["quantidade_dia"] > 0
+    groupers = [serie[chave] for chave in chaves_serie]
     data_venda_acumulada = serie["data"].where(venda_no_dia).groupby(
-        chaves, sort=False
+        groupers, sort=False
     ).ffill()
     ultima_venda_anterior = data_venda_acumulada.groupby(
-        chaves, sort=False
+        groupers, sort=False
     ).shift(1)
     serie["dias_desde_ultima_venda"] = (
         serie["data"] - ultima_venda_anterior
     ).dt.days.astype("float64")
     serie["taxa_historica_dias_com_venda"] = venda_no_dia.astype(float).groupby(
-        chaves, sort=False
+        groupers, sort=False
     ).transform(
         lambda valores: valores.shift(1).expanding(min_periods=1).mean()
     )
 
-    # A razão é indefinida quando a média é zero. Nesses casos mantemos NaN e
-    # excluímos a observação do modelo com uma contagem explícita no relatório.
     serie["razao_quantidade_media_28d"] = np.nan
     denominador_valido = serie["media_anterior_28d"] > 0
     serie.loc[
@@ -109,23 +110,29 @@ def _adicionar_features_historicas(serie_completa):
     return serie
 
 
-def preparar_observacoes_modelo(diagnostico, *, permitir_vazio=False):
+def preparar_observacoes_modelo(
+    diagnostico,
+    *,
+    permitir_vazio=False,
+    chaves_serie=("filial", "codigo_produto"),
+):
     """Aplica elegibilidade e devolve somente dias positivos modeláveis."""
 
+    chaves_serie = list(chaves_serie)
     resumo_produtos = diagnostico["resumo_produtos"].copy()
     resumo_produtos["dias_decorridos"] = (
         resumo_produtos["ultima_venda"] - resumo_produtos["primeira_venda"]
     ).dt.days
     produtos_intervalo_elegivel = resumo_produtos.loc[
         resumo_produtos["dias_decorridos"] >= MINIMO_DIAS_DECORRIDOS,
-        ["filial", "codigo_produto"],
+        chaves_serie,
     ]
     chaves_elegiveis = pd.MultiIndex.from_frame(produtos_intervalo_elegivel)
 
-    serie = _adicionar_features_historicas(diagnostico["serie_b"])
-    indice_serie = pd.MultiIndex.from_frame(
-        serie[["filial", "codigo_produto"]]
+    serie = _adicionar_features_historicas(
+        diagnostico["serie_b"], chaves_serie=chaves_serie
     )
+    indice_serie = pd.MultiIndex.from_frame(serie[chaves_serie])
     serie["produto_intervalo_elegivel"] = indice_serie.isin(chaves_elegiveis)
 
     dias_positivos = serie["quantidade_dia"] > 0
@@ -144,16 +151,14 @@ def preparar_observacoes_modelo(diagnostico, *, permitir_vazio=False):
 
     if observacoes.empty and not permitir_vazio:
         raise ErroModelo("Nenhuma observação atende aos critérios do modelo.")
-    if observacoes.duplicated(["filial", "codigo_produto", "data"]).any():
+    if observacoes.duplicated([*chaves_serie, "data"]).any():
         raise ErroModelo("Foram encontradas observações produto-dia duplicadas.")
     if not np.isfinite(
         observacoes.loc[:, FEATURES_MODELO].to_numpy(dtype=float)
     ).all():
         raise ErroModelo("A matriz final ainda contém NaN ou infinito.")
 
-    produtos_modelados = observacoes[
-        ["filial", "codigo_produto"]
-    ].drop_duplicates()
+    produtos_modelados = observacoes[chaves_serie].drop_duplicates()
     total_produtos = len(resumo_produtos)
     return {
         "serie_features": serie,

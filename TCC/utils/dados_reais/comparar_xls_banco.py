@@ -27,19 +27,17 @@ COD_FILIAL = 6
 DATA_INICIAL = date(2026, 4, 1)
 DATA_FINAL = date(2026, 4, 15)
 
-# Posições confirmadas no relatório. As colunas pessoais AF, AM e AP,
-# além do telefone iniciado em K, não são acessadas pelo parser.
-COLUNA_VENDA = 0       # A
-COLUNA_FILIAL = 3      # D
-COLUNA_DATA = 16       # Q
-COLUNA_HORA = 21       # V
-COLUNA_TOTAL_VENDA = 57  # BF
-COLUNA_CODIGO_ITEM = 1   # B
-COLUNA_DESCRICAO_ITEM = 6  # G
-COLUNA_QUANTIDADE = 18    # S
-COLUNA_VALOR_UNITARIO = 22  # W
-COLUNA_TOTAL_ITEM = 30       # AE
-MAX_COLUNA_LIDA = 58         # BF
+COLUNA_VENDA = 0
+COLUNA_FILIAL = 3
+COLUNA_DATA = 16
+COLUNA_HORA = 21
+COLUNA_TOTAL_VENDA = 57
+COLUNA_CODIGO_ITEM = 1
+COLUNA_DESCRICAO_ITEM = 6
+COLUNA_QUANTIDADE = 18
+COLUNA_VALOR_UNITARIO = 22
+COLUNA_TOTAL_ITEM = 30
+MAX_COLUNA_LIDA = 58
 COLUNAS_TECNICAS = {
     COLUNA_VENDA,
     COLUNA_FILIAL,
@@ -483,8 +481,6 @@ def _comparar_identificadores(xlsx, banco):
 
 
 def comparar():
-    # Confirma primeiro o acesso protegido à fonte. Assim, uma falha de
-    # conexão não obriga a reler e reconstruir todo o XLSX.
     banco = consultar_banco()
     xlsx = ler_relatorio_xlsx()
     metricas_xlsx = _metricas_xlsx(xlsx)

@@ -29,7 +29,6 @@ class TestValidacaoSinteticaModeloC(unittest.TestCase):
         }
         for feature in FEATURES_MODELO_C:
             dados[feature] = np.ones(quantidade, dtype=float)
-        # Campos recalculados quando a quantidade do dia é injetada.
         dados.update(
             {
                 "media_anterior_7d": np.full(quantidade, 3.0),

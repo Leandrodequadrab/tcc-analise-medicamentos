@@ -17,20 +17,18 @@ PADRAO_TOTAL_PRODUTO = re.compile(
     r"^\s*Total\s+Produto:\s*(\d+)\s+(.+?)\s*$", re.IGNORECASE
 )
 
-# Posições confirmadas no Rel_0024. M, N e O contêm vendedor,
-# cliente e telefone; não são acessadas.
-COL_VENDA = 0       # A
-COL_FILIAL = 1      # B
-COL_TIPO = 5        # F
-COL_DATA = 6        # G
-COL_HORA_BRUTA = 10  # K, valor exportado sem formato temporal confiável
-COL_TOTAL_PRODUTO_QUANTIDADE = 15  # P
-COL_QUANTIDADE = 16  # Q
-COL_VALOR_UNITARIO = 18  # S
-COL_PERCENTUAL_DESCONTO = 19  # T
-COL_VALOR_DESCONTO = 20  # U
-COL_VALOR_ACRESCIMO = 21  # V
-COL_TOTAL_ITEM = 24  # Y
+COL_VENDA = 0
+COL_FILIAL = 1
+COL_TIPO = 5
+COL_DATA = 6
+COL_HORA_BRUTA = 10
+COL_TOTAL_PRODUTO_QUANTIDADE = 15
+COL_QUANTIDADE = 16
+COL_VALOR_UNITARIO = 18
+COL_PERCENTUAL_DESCONTO = 19
+COL_VALOR_DESCONTO = 20
+COL_VALOR_ACRESCIMO = 21
+COL_TOTAL_ITEM = 24
 MAX_COLUNAS = 25
 
 

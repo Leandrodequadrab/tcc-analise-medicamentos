@@ -82,8 +82,8 @@
                 <div class="col-6 col-lg-4 col-xl-2"><article class="card metric-card h-100 border-0 shadow-sm"><div class="card-body"><p class="metric-label">Produtos analisáveis</p><p class="metric-value">{{ dados.metricas.produtos_modelaveis }}</p></div></article></div>
                 <div class="col-6 col-lg-4 col-xl-2"><article class="card metric-card metric-neutral h-100 border-0 shadow-sm"><div class="card-body"><p class="metric-label">Histórico insuficiente</p><p class="metric-value">{{ dados.metricas.produtos_historico_insuficiente }}</p></div></article></div>
                 <div class="col-6 col-lg-4 col-xl-2"><article class="card metric-card h-100 border-0 shadow-sm"><div class="card-body"><p class="metric-label">Observações avaliadas</p><p class="metric-value">{{ dados.metricas.observacoes_avaliadas }}</p></div></article></div>
-                <div class="col-6 col-lg-4 col-xl-2"><article class="card metric-card metric-warning h-100 border-0 shadow-sm"><div class="card-body"><p class="metric-label">Outliers gerais</p><p class="metric-value">{{ dados.metricas.outliers }}</p><small class="text-secondary">Inclui altas e quedas</small></div></article></div>
-                <div class="col-6 col-lg-4 col-xl-2"><article class="card metric-card metric-danger h-100 border-0 shadow-sm"><div class="card-body"><p class="metric-label">Aumentos atípicos</p><p class="metric-value">{{ dados.metricas.aumentos_atipicos }}</p><small class="text-secondary">Outlier acima da referência</small></div></article></div>
+                <div class="col-6 col-lg-4 col-xl-2"><article class="card metric-card metric-warning h-100 border-0 shadow-sm"><div class="card-body"><p class="metric-label">Anomalias gerais</p><p class="metric-value">{{ dados.metricas.outliers }}</p><small class="text-secondary">Inclui altas e quedas</small></div></article></div>
+                <div class="col-6 col-lg-4 col-xl-2"><article class="card metric-card metric-danger h-100 border-0 shadow-sm"><div class="card-body"><p class="metric-label">Aumentos atípicos</p><p class="metric-value">{{ dados.metricas.aumentos_atipicos }}</p><small class="text-secondary">Anomalia acima da referência</small></div></article></div>
                 <div class="col-6 col-lg-4 col-xl-2"><article class="card metric-card metric-period h-100 border-0 shadow-sm"><div class="card-body"><p class="metric-label">Período apresentado</p><p class="period-value">{{ dados.metricas.periodo_analisado.data_inicial }}</p><small class="text-secondary">até {{ dados.metricas.periodo_analisado.data_final }}</small></div></article></div>
             </section>
             <p class="text-secondary small mb-4">Catálogo: {{ dados.metricas.produtos_catalogo }} produtos · MED: {{ dados.metricas.produtos_med }} · elegíveis no escopo operacional: {{ dados.metricas.produtos_elegiveis }} · excluídos: {{ dados.metricas.produtos_excluidos }}.</p>
@@ -103,7 +103,7 @@
 
             <section class="card content-card border-0 shadow-sm mb-4"><div class="card-body p-4">
                 <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
-                    <div><h2 class="h5 mb-1">Aumentos atípicos encontrados</h2><p class="text-secondary small mb-0">Ordenação pelo menor índice de decisão, seguindo a prioridade atual do pipeline.</p></div>
+                    <div><h2 class="h5 mb-1">Aumentos atípicos encontrados</h2><p class="text-secondary small mb-0">Ordenação pelo menor índice de decisão, seguindo a prioridade atual da análise.</p></div>
                     <span class="badge rounded-pill text-bg-danger">{{ dados.total_resultados_filtrados }} ocorrências</span>
                 </div>
                 {% if dados.resultados_limitados %}<div class="alert alert-light border small py-2" role="status">Exibindo os {{ dados.limite_exibicao }} resultados mais relevantes de {{ dados.total_resultados_filtrados }}.</div>{% endif %}
@@ -115,7 +115,7 @@
                         {% else %}<tr><td colspan="10" class="text-center text-secondary py-4">Nenhum aumento atípico nos filtros selecionados.</td></tr>{% endfor %}
                     </tbody>
                 </table></div>
-                <p class="text-secondary small mt-3 mb-0">Índice de decisão negativo indica classificação como outlier. Esse valor não é uma probabilidade.</p>
+                <p class="text-secondary small mt-3 mb-0">Índice de decisão negativo indica classificação como anomalia (outlier). Esse valor não é uma probabilidade.</p>
             </div></section>
 
             <section class="card explanation-card border-0 shadow-sm"><div class="card-body p-4">

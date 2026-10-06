@@ -343,7 +343,6 @@ def _abrir_tcc_somente_leitura():
 def investigar():
     """Coleta evidências estruturais e de cobertura, sem modificar os bancos."""
 
-    # Esta abertura é intencionalmente a primeira ação de banco da investigação.
     with conectar_farmacia_somente_leitura() as farmacia:
         modo_farmacia = farmacia.execute(text("SHOW transaction_read_only")).scalar_one()
         if modo_farmacia != "on":
@@ -375,8 +374,6 @@ def investigar():
         )
 
         rede_cobertura = None
-        # A rede é escolhida apenas quando todos os códigos apontam de forma
-        # inequívoca para uma única rede; não é inferida a partir da filial.
         redes_por_codigo = defaultdict(set)
         for produto in produtos_cadastro:
             redes_por_codigo[produto["cod_reduzido"]].add(produto["cod_rede"])

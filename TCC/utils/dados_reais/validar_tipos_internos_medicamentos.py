@@ -27,8 +27,6 @@ from .investigar_classificacao_medicamentos import (
 TOTAL_ESPERADO = 4_666
 QUALIFICADORES = ("OTC", "TARJA", "CONTROLADO", "CONTINUO")
 
-# Somente auditoria por descrição. Estes padrões não incluem, excluem ou
-# reclassificam nenhum produto.
 PADROES_PRODUTOS_INCOMUNS = (
     ("lubrificante", r"\b(?:LUB|LUBRIFICANTE|KY)\b"),
     ("teste", r"\bTESTE\b"),
@@ -40,8 +38,6 @@ PADROES_PRODUTOS_INCOMUNS = (
     ("dispositivo", r"\b(?:SERINGA|AGULHA|TERMOMETRO)\b"),
 )
 
-# Categorias fora da regra MED que merecem revisão humana por serem próximas ou
-# confundíveis no contexto de uma farmácia. Não são classificadas como MED.
 PADROES_TIPOS_AMBIGUOS = (
     "ANTICONCEPCIONAL",
     "OFICINAIS",
@@ -173,8 +169,6 @@ def executar() -> dict:
         and produto.get("cod_tipo") not in codigos_tipos_med
     ]
 
-    # A etapa 10D.2 é reexecutada sem persistência para obter exatamente a mesma
-    # evidência regulatória, preservada como complemento e não como filtro.
     anvisa = executar_anvisa()
     classificacao_por_codigo = {
         item["codigo_produto"]: item["classificacao_experimental"]

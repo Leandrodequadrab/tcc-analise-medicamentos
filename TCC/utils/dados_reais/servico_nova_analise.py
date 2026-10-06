@@ -10,16 +10,20 @@ import numpy as np
 import pandas as pd
 from sqlalchemy import bindparam, text
 from werkzeug.utils import secure_filename
+from utils.chave_analitica import carregar_cadastro_dcb
+from utils.ml.modelo_c_chave_analitica import (
+    CHAVES_SERIE as CHAVES_HIBRIDAS,
+    construir_diagnostico_chave,
+    executar_modelo_c_hibrido_em_diagnostico,
+)
 
 from utils.classificacao_medicamentos import (
     SEM_CLASSIFICACAO,
     classificar_elegibilidade,
 )
-from utils.ml.definir_modelo_validacao import executar_modelo_c_em_diagnostico
 from utils.ml.diagnosticar_series import (
     _criar_engine_somente_leitura,
     _confirmar_conexao,
-    construir_calendario_completo,
 )
 
 from .importar_rel0024 import ErroImportacaoRel0024, _validar_para_importacao
@@ -27,7 +31,6 @@ from .validar_rel0024 import ler_rel0024, validar_rel0024
 
 
 EXTENSOES_PERMITIDAS = frozenset({".xls", ".xlsx"})
-LIMITE_AUMENTOS = 100
 CONSULTA_CATALOGO = text(
     """
     SELECT cod_reduzido, cod_tipo, nom_tipo, nom_produto
@@ -91,65 +94,6 @@ def _catalogo_classificado(produtos_descricoes, metadados, filial):
             }
         )
     return pd.DataFrame(linhas)
-
-
-def _diagnostico_em_memoria(serie_vendas, catalogo):
-    chaves = ["filial", "codigo_produto"]
-    resumo = (
-        serie_vendas.groupby(chaves, as_index=False)
-        .agg(
-            descricao_original=("descricao_original", "first"),
-            cod_tipo=("cod_tipo", "first"),
-            nom_tipo=("nom_tipo", "first"),
-            origem_classificacao=("origem_classificacao", "first"),
-            classificacao_operacional=("classificacao_operacional", "first"),
-            elegivel_analise_automedicacao=(
-                "elegivel_analise_automedicacao", "first"
-            ),
-            primeira_venda=("data", "min"),
-            ultima_venda=("data", "max"),
-            dias_com_venda=("data", "nunique"),
-            quantidade_total=("quantidade_total", "sum"),
-            media_dia_com_venda=("quantidade_total", "mean"),
-        )
-    )
-    resumo["dias_no_intervalo_individual"] = (
-        resumo["ultima_venda"] - resumo["primeira_venda"]
-    ).dt.days + 1
-    resumo["dias_sem_venda"] = (
-        resumo["dias_no_intervalo_individual"] - resumo["dias_com_venda"]
-    )
-    resumo["frequencia_no_intervalo"] = (
-        resumo["dias_com_venda"] / resumo["dias_no_intervalo_individual"]
-    )
-    serie_completa = construir_calendario_completo(serie_vendas, resumo)
-    produtos_med = int(
-        catalogo["classificacao_operacional"].str.startswith("MED_").sum()
-    )
-    elegiveis = int(catalogo["elegivel_analise_automedicacao"].sum())
-    return {
-        "serie_vendas": serie_vendas,
-        "serie_a": serie_vendas,
-        "serie_b": serie_completa,
-        "resumo_produtos": resumo,
-        "catalogo_classificado": catalogo,
-        "universo_operacional": {
-            "filtro_aplicado": True,
-            "produtos_catalogo": len(catalogo),
-            "produtos_med": produtos_med,
-            "produtos_nao_med": len(catalogo) - produtos_med,
-            "produtos_elegiveis": elegiveis,
-            "produtos_excluidos": len(catalogo) - elegiveis,
-        },
-        "periodo": {
-            "data_inicial": serie_vendas["data"].min().date(),
-            "data_final": serie_vendas["data"].max().date(),
-            "dias": int(
-                (serie_vendas["data"].max() - serie_vendas["data"].min()).days
-                + 1
-            ),
-        },
-    }
 
 
 def _serie_diaria_elegivel(itens, catalogo):
@@ -227,24 +171,71 @@ def analisar_dados_rel0024(
     serie_vendas = _serie_diaria_elegivel(itens, catalogo)
     pipeline = None
     if not serie_vendas.empty:
-        diagnostico = _diagnostico_em_memoria(serie_vendas, catalogo)
-        pipeline = executar_modelo_c_em_diagnostico(
+        produtos_chave = catalogo.copy()
+        produtos_chave["descricao"] = produtos_chave["descricao_original"]
+        try:
+            cadastro_dcb = carregar_cadastro_dcb()
+        except (OSError, ValueError) as erro:
+            raise ErroNovaAnalise(
+                "O cadastro auxiliar DCB não pôde ser validado. "
+                "Confira o arquivo local e suas associações.",
+                status_http=503,
+            ) from erro
+        diagnostico = construir_diagnostico_chave(
+            serie_vendas,
+            produtos_chave,
+            cadastro_dcb,
+        )
+        pipeline = executar_modelo_c_hibrido_em_diagnostico(
             diagnostico,
             permitir_historico_insuficiente=True,
         )
         resultados = pipeline["resultado"]
+        classificacoes_chave = (
+            diagnostico["catalogo_chaves"]
+            .groupby(list(CHAVES_HIBRIDAS), as_index=False, dropna=False)
+            .agg(
+                classificacoes_operacionais=(
+                    "classificacao_operacional",
+                    lambda valores: tuple(sorted(set(map(str, valores)))),
+                )
+            )
+        )
+        if not resultados.empty:
+            resultados = resultados.merge(
+                classificacoes_chave,
+                on=list(CHAVES_HIBRIDAS),
+                how="left",
+                validate="many_to_one",
+            )
     else:
         resultados = pd.DataFrame()
 
-    produtos_modelaveis = (
-        int(
-            resultados[["filial", "codigo_produto"]]
-            .drop_duplicates()
-            .shape[0]
-        )
+    catalogo_chaves = (
+        pipeline["diagnostico"]["catalogo_chaves"]
+        if pipeline is not None
+        else pd.DataFrame(columns=list(CHAVES_HIBRIDAS))
+    )
+    chaves_analiticas = int(
+        catalogo_chaves[list(CHAVES_HIBRIDAS)].drop_duplicates().shape[0]
+    )
+    chaves_modelaveis = (
+        int(resultados[list(CHAVES_HIBRIDAS)].drop_duplicates().shape[0])
         if not resultados.empty
         else 0
     )
+    if chaves_modelaveis:
+        chaves_com_historico = resultados[list(CHAVES_HIBRIDAS)].drop_duplicates()
+        produtos_modelaveis = int(
+            catalogo_chaves.merge(
+                chaves_com_historico,
+                on=list(CHAVES_HIBRIDAS),
+                how="inner",
+                validate="many_to_one",
+            )["codigo_produto"].nunique()
+        )
+    else:
+        produtos_modelaveis = 0
     observacoes = len(resultados)
     outliers = int(resultados["anomalia"].sum()) if observacoes else 0
     aumentos = resultados.loc[resultados["aumento_atipico"]].copy() if observacoes else pd.DataFrame()
@@ -268,20 +259,54 @@ def analisar_dados_rel0024(
             ["decision_function", "data"],
             ascending=[True, False],
             kind="stable",
-        ).head(LIMITE_AUMENTOS)
+        )
         if not aumentos.empty
         else aumentos
     )
     tabela_aumentos = []
+    associacoes_por_chave = {}
+    if pipeline is not None:
+        catalogo_produtos_chave = pipeline["diagnostico"]["catalogo_chaves"]
+        for (tipo, chave), grupo in catalogo_produtos_chave.groupby(
+            list(CHAVES_HIBRIDAS), dropna=False, sort=False
+        ):
+            associacoes_por_chave[(str(tipo), chave)] = [
+                {
+                    "codigo": int(produto.codigo_produto),
+                    "descricao": str(produto.descricao_original),
+                }
+                for produto in grupo[
+                    ["codigo_produto", "descricao_original"]
+                ].drop_duplicates().sort_values("codigo_produto").itertuples(index=False)
+            ]
     for linha in aumentos.itertuples(index=False):
         referencia = float(linha.media_positiva_historica)
         quantidade = float(linha.quantidade_dia)
+        tipo_chave = str(linha.tipo_chave)
+        codigos = tuple(linha.codigos_produto)
+        descricoes = tuple(linha.descricoes_associadas)
+        codigo_produto = (
+            int(linha.codigo_produto)
+            if pd.notna(linha.codigo_produto)
+            else None
+        )
         tabela_aumentos.append(
             {
                 "data": linha.data.date().isoformat(),
-                "codigo_produto": int(linha.codigo_produto),
+                "tipo_chave": tipo_chave,
+                "chave_analitica": str(linha.chave_analitica),
+                "codigo_produto": codigo_produto,
                 "produto": str(linha.descricao_original),
-                "classificacao": str(linha.classificacao_operacional),
+                "nom_dcb": str(linha.nom_dcb) if pd.notna(linha.nom_dcb) else None,
+                "codigos_produto": [int(codigo) for codigo in codigos],
+                "descricoes_associadas": [str(texto) for texto in descricoes],
+                "associacoes_produtos": associacoes_por_chave.get(
+                    (tipo_chave, linha.chave_analitica), []
+                ),
+                "produtos_associados": len(codigos),
+                "classificacoes_operacionais": list(
+                    getattr(linha, "classificacoes_operacionais", ()) or ()
+                ),
                 "classificacao_modelo": int(
                     linha.classificacao_isolation_forest
                 ),
@@ -307,7 +332,11 @@ def analisar_dados_rel0024(
             "produtos_elegiveis": produtos_elegiveis,
             "produtos_inelegiveis": produtos_inelegiveis,
             "produtos_modelaveis": produtos_modelaveis,
-            "historico_insuficiente": produtos_elegiveis - produtos_modelaveis,
+            "produtos_historico_insuficiente": produtos_elegiveis - produtos_modelaveis,
+            "historico_insuficiente": chaves_analiticas - chaves_modelaveis,
+            "chaves_analiticas": chaves_analiticas,
+            "chaves_modelaveis": chaves_modelaveis,
+            "chaves_historico_insuficiente": chaves_analiticas - chaves_modelaveis,
             "observacoes_avaliadas": observacoes,
             "outliers": outliers,
             "aumentos_atipicos": int(
@@ -338,10 +367,7 @@ def analisar_dados_rel0024(
             },
         },
         "aumentos": tabela_aumentos,
-        "aumentos_limitados": (
-            int(resultados["aumento_atipico"].sum()) > LIMITE_AUMENTOS
-            if observacoes else False
-        ),
+        "aumentos_limitados": False,
         "mensagem_historico": (
             "Arquivo processado, mas o período não fornece histórico suficiente "
             "para modelar produtos elegíveis."
@@ -349,9 +375,9 @@ def analisar_dados_rel0024(
             else None
         ),
         "metodologia": {
-            "nivel": "filial + código do produto + dia",
+            "nivel": "filial + chave analítica híbrida + dia",
             "fonte_historico": "somente o arquivo desta análise",
-            "modelo": "Modelo C congelado; resultados não persistidos",
+            "modelo": "Modelo C híbrido congelado; resultados não persistidos",
         },
     }
 

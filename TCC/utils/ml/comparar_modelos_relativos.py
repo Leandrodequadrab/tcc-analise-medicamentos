@@ -60,13 +60,17 @@ def _mad(valores):
     return float(np.median(np.abs(valores_validos - mediana)))
 
 
-def adicionar_features_relativas(preparo):
+def adicionar_features_relativas(
+    preparo, chaves_serie=("filial", "codigo_produto")
+):
     """Cria features relativas usando apenas os 28 dias anteriores."""
 
+    chaves_serie = list(chaves_serie)
+    chaves_observacao = [*chaves_serie, "data"]
     serie = preparo["serie_features"].copy().sort_values(
-        ["filial", "codigo_produto", "data"], kind="stable"
+        chaves_observacao, kind="stable"
     )
-    agrupado = serie.groupby(["filial", "codigo_produto"], sort=False)
+    agrupado = serie.groupby(chaves_serie, sort=False, dropna=False)
 
     serie["mediana_positiva_anterior_28d"] = agrupado[
         "quantidade_dia"
@@ -102,8 +106,7 @@ def adicionar_features_relativas(preparo):
     )
 
     campos_novos = [
-        "filial",
-        "codigo_produto",
+        *chaves_serie,
         "data",
         "mediana_positiva_anterior_28d",
         "mad_positivo_anterior_28d",
@@ -114,7 +117,7 @@ def adicionar_features_relativas(preparo):
     ]
     observacoes = preparo["observacoes"].merge(
         serie[campos_novos],
-        on=["filial", "codigo_produto", "data"],
+        on=chaves_observacao,
         how="left",
         validate="one_to_one",
     )

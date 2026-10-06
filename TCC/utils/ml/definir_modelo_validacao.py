@@ -5,7 +5,6 @@ razões instáveis por diferenças de logaritmos contra o histórico positivo do
 próprio produto. Tudo permanece em memória e em modo somente leitura.
 """
 
-from collections import OrderedDict
 import sys
 
 import numpy as np
@@ -50,13 +49,16 @@ FEATURES_INTERPRETACAO_C = (
 )
 
 
-def calcular_historico_positivo(serie_features):
+def calcular_historico_positivo(
+    serie_features, chaves_serie=("filial", "codigo_produto")
+):
     """Expõe o contexto positivo anterior usado pelo Modelo C."""
 
+    chaves_serie = list(chaves_serie)
     serie = serie_features.copy().sort_values(
-        ["filial", "codigo_produto", "data"], kind="stable"
+        [*chaves_serie, "data"], kind="stable"
     )
-    chaves = [serie["filial"], serie["codigo_produto"]]
+    chaves = [serie[chave] for chave in chaves_serie]
     positiva = (serie["quantidade_dia"] > 0).astype(int)
     quantidade_positiva = serie["quantidade_dia"].where(
         serie["quantidade_dia"] > 0, 0.0
@@ -88,17 +90,22 @@ def calcular_historico_positivo(serie_features):
     return serie
 
 
-def _adicionar_historico_positivo(comparacao, serie_historica=None):
+def _adicionar_historico_positivo(
+    comparacao,
+    serie_historica=None,
+    chaves_serie=("filial", "codigo_produto"),
+):
     """Anexa às observações as estatísticas positivas calculadas no passado."""
 
     if serie_historica is None:
         serie_historica = calcular_historico_positivo(
-            comparacao["preparo"]["serie_features"]
+            comparacao["preparo"]["serie_features"],
+            chaves_serie=chaves_serie,
         )
 
+    chaves_serie = list(chaves_serie)
     campos = [
-        "filial",
-        "codigo_produto",
+        *chaves_serie,
         "data",
         "vendas_positivas_anteriores",
         "media_positiva_historica",
@@ -108,7 +115,7 @@ def _adicionar_historico_positivo(comparacao, serie_historica=None):
     ]
     observacoes = comparacao["resultado_b"].merge(
         serie_historica[campos],
-        on=["filial", "codigo_produto", "data"],
+        on=[*chaves_serie, "data"],
         how="left",
         validate="one_to_one",
     )
@@ -152,8 +159,6 @@ def preparar_modelo_c(observacoes):
         >= MINIMO_VENDAS_POSITIVAS_MODELO_C
     ].copy()
 
-    # log1p produz log((1+atual)/(1+referência)) por subtração de logs.
-    # Isso permanece definido mesmo para referências pequenas, sem clipping.
     dados["desvio_log_media_positiva_historica"] = (
         np.log1p(dados["quantidade_dia"])
         - np.log1p(dados["media_positiva_historica"])
@@ -212,15 +217,21 @@ def executar_modelo_c(apenas_elegiveis_automedicacao=False):
 
 
 def executar_modelo_c_em_diagnostico(
-    diagnostico, *, permitir_historico_insuficiente=False
+    diagnostico,
+    *,
+    permitir_historico_insuficiente=False,
+    chaves_serie=("filial", "codigo_produto"),
 ):
     """Executa o nÃºcleo congelado sobre uma fonte jÃ¡ preparada em memÃ³ria."""
 
     preparo = preparar_observacoes_modelo(
         diagnostico,
         permitir_vazio=permitir_historico_insuficiente,
+        chaves_serie=chaves_serie,
     )
-    serie_contexto = calcular_historico_positivo(preparo["serie_features"])
+    serie_contexto = calcular_historico_positivo(
+        preparo["serie_features"], chaves_serie=chaves_serie
+    )
     if preparo["observacoes"].empty:
         if not permitir_historico_insuficiente:
             raise ErroModelo("Nenhuma observaÃ§Ã£o atende aos critÃ©rios do modelo.")
@@ -233,7 +244,7 @@ def executar_modelo_c_em_diagnostico(
         }
 
     observacoes_relativas, _diagnostico_mad = adicionar_features_relativas(
-        preparo
+        preparo, chaves_serie=chaves_serie
     )
     observacoes_historicas = _adicionar_historico_positivo(
         {
@@ -241,6 +252,7 @@ def executar_modelo_c_em_diagnostico(
             "resultado_b": observacoes_relativas,
         },
         serie_historica=serie_contexto,
+        chaves_serie=chaves_serie,
     )
     observacoes_c = preparar_modelo_c(observacoes_historicas)
     modelo, resultado = treinar_modelo_c(observacoes_c)

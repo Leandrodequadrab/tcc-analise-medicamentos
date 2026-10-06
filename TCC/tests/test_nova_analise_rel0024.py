@@ -4,12 +4,13 @@ from io import BytesIO
 import unittest
 from unittest.mock import patch
 
+import pandas as pd
 from openpyxl import Workbook
 from sqlalchemy import text
 
 from app import app
 from utils.dados_reais.servico_nova_analise import analisar_dados_rel0024
-from utils.ml.definir_modelo_validacao import executar_modelo_c_em_diagnostico
+from utils.ml.modelo_c_chave_analitica import executar_modelo_c_hibrido_em_diagnostico
 from utils.ml.diagnosticar_series import (
     _confirmar_conexao,
     _criar_engine_somente_leitura,
@@ -124,6 +125,9 @@ class NovaAnaliseRel0024TestCase(unittest.TestCase):
         resposta = self.cliente.get("/nova-analise")
         self.assertEqual(resposta.status_code, 200)
         self.assertIn(b"Nova an\xc3\xa1lise", resposta.data)
+        self.assertIn(b"pelo menos 7 dias anteriores com vendas positivas", resposta.data)
+        self.assertIn(b"nova_analise.css", resposta.data)
+        self.assertIn(b"form-nova-analise", resposta.data)
 
         sem_arquivo = self.cliente.post("/nova-analise", data={})
         self.assertEqual(sem_arquivo.status_code, 400)
@@ -150,6 +154,9 @@ class NovaAnaliseRel0024TestCase(unittest.TestCase):
         self.assertEqual(resposta.status_code, 200)
         self.assertIn("Histórico insuficiente".encode(), resposta.data)
         self.assertIn(b"1" , resposta.data)
+        self.assertIn("Chaves analíticas".encode(), resposta.data)
+        self.assertIn("Analisar outro arquivo".encode(), resposta.data)
+        self.assertIn(b'href="/nova-analise"', resposta.data)
         self.assertEqual(antes, depois)
 
     def test_produto_sem_catalogo_fica_sem_classificacao_e_inelegivel(self):
@@ -188,8 +195,8 @@ class NovaAnaliseRel0024TestCase(unittest.TestCase):
 
         with (
             patch(
-                "utils.dados_reais.servico_nova_analise.executar_modelo_c_em_diagnostico",
-                wraps=executar_modelo_c_em_diagnostico,
+                "utils.dados_reais.servico_nova_analise.executar_modelo_c_hibrido_em_diagnostico",
+                wraps=executar_modelo_c_hibrido_em_diagnostico,
             ) as nucleo_modelo,
             patch(
                 "utils.ml.definir_modelo_validacao.diagnosticar_series",
@@ -212,6 +219,90 @@ class NovaAnaliseRel0024TestCase(unittest.TestCase):
             a1["metodologia"]["fonte_historico"],
             "somente o arquivo desta análise",
         )
+
+
+    def test_upload_agrupa_dcb_e_preserva_produtos_sem_dcb(self):
+        codigos = [30001, 30002, 900001]
+        itens = []
+        inicio = date(2025, 1, 1)
+        descricoes = {
+            30001: {"MEDICAMENTO A 10MG"},
+            30002: {"MEDICAMENTO A 20MG"},
+            900001: {"PRODUTO SEM DCB"},
+        }
+        for dia in range(65):
+            for codigo in codigos:
+                quantidade = 80 if codigo in (30001, 30002) and dia == 55 else 1
+                itens.append(
+                    {
+                        "filial": 6,
+                        "numero_venda": 700000 + dia * 10 + codigo % 10,
+                        "codigo_produto": codigo,
+                        "data": inicio + timedelta(days=dia),
+                        "tipo": "Venda",
+                        "quantidade": Decimal(str(quantidade)),
+                    }
+                )
+        validacao = {
+            "filiais": [6],
+            "primeira_data": inicio,
+            "ultima_data": inicio + timedelta(days=64),
+            "linhas_venda": len(itens),
+            "linhas_devolucao": 0,
+        }
+        catalogo = _catalogo(codigos)
+        dcb = pd.DataFrame(
+            [
+                {"cod_reduzido": "30001", "cod_dcb": "123", "nom_dcb": "SUBSTANCIA A"},
+                {"cod_reduzido": "30002", "cod_dcb": "123", "nom_dcb": "SUBSTANCIA A"},
+            ]
+        )
+        with patch(
+            "utils.dados_reais.servico_nova_analise.carregar_cadastro_dcb",
+            return_value=dcb,
+        ):
+            resultado = analisar_dados_rel0024(
+                itens, descricoes, catalogo, nome_arquivo="dcb.xlsx",
+                sha256="d" * 64, validacao=validacao,
+            )
+
+        self.assertEqual(resultado["metricas"]["produtos_encontrados"], 3)
+        self.assertEqual(resultado["metricas"]["chaves_analiticas"], 2)
+        dcb_rows = [item for item in resultado["aumentos"] if item["tipo_chave"] == "DCB"]
+        self.assertTrue(dcb_rows)
+        self.assertEqual(dcb_rows[0]["nom_dcb"], "SUBSTANCIA A")
+        self.assertEqual(dcb_rows[0]["produtos_associados"], 2)
+        self.assertEqual(dcb_rows[0]["codigos_produto"], [30001, 30002])
+        resultado_com_fallback = dict(resultado)
+        resultado_com_fallback["aumentos"] = list(resultado["aumentos"])
+        linha_sem_dcb = dict(dcb_rows[0])
+        linha_sem_dcb.update(
+            tipo_chave="PRODUTO",
+            nom_dcb=None,
+            produto="PRODUTO SEM DCB",
+            codigo_produto=900001,
+            codigos_produto=[900001],
+            produtos_associados=1,
+            associacoes_produtos=[],
+        )
+        resultado_com_fallback["aumentos"].append(linha_sem_dcb)
+        with patch("app.analisar_upload_rel0024", return_value=resultado_com_fallback):
+            resposta = self.cliente.post(
+                "/nova-analise",
+                data={"arquivo": (BytesIO(b"x"), "resultado.xlsx")},
+                content_type="multipart/form-data",
+            )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn("Tipo de chave".encode(), resposta.data)
+        self.assertIn("SUBSTANCIA A".encode(), resposta.data)
+        self.assertIn("30001 — MEDICAMENTO A 10MG".encode(), resposta.data)
+        self.assertIn("Princípio ativo / DCB".encode(), resposta.data)
+        self.assertIn("Não disponível no cadastro".encode(), resposta.data)
+        self.assertIn(b"Diferen\xc3\xa7a vs. m\xc3\xa9dia", resposta.data)
+        self.assertIn("Maior → menor".encode(), resposta.data)
+        self.assertIn(b"01/01/2025", resposta.data)
+        self.assertEqual(resposta.data.count(b'<tr data-date='), len(resultado_com_fallback["aumentos"]))
+        self.assertIn(b'href="/nova-analise"', resposta.data)
 
 
 if __name__ == "__main__":

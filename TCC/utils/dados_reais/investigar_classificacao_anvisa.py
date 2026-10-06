@@ -19,7 +19,6 @@ from dataclasses import dataclass
 from datetime import date
 import hashlib
 import json
-import os
 from pathlib import Path
 import re
 import sys
@@ -280,11 +279,6 @@ def _ler_cmed(caminho: Path) -> pd.DataFrame:
 
 def _ler_restricoes(caminho: Path) -> pd.DataFrame:
     _validar_arquivo(caminho, "TA_RESTRICAO_MEDICAMENTO.csv", URL_RESTRICOES)
-    # O arquivo oficial contém algumas concentrações com entidade HTML seguida
-    # de ponto e vírgula não escapado (por exemplo, ``&#8805; 30``). Essas linhas
-    # têm dez campos para um cabeçalho de nove. Como esta fonte não possui chave
-    # regulatória e não participa do vínculo, contabilizamos e isolamos as linhas
-    # irregulares em vez de repará-las por inferência ou ignorá-las silenciosamente.
     linhas_validas = []
     linhas_irregulares = []
     with caminho.open("r", encoding="cp1252", newline="") as arquivo:
@@ -557,8 +551,6 @@ def _classificar_produtos(
                     "registro-base oficial sem segunda evidência estruturada"
                 )
 
-        # A fonte consultada é um catálogo de medicamentos. A ausência nela não
-        # constitui evidência oficial positiva de uma categoria não medicamentosa.
         correspondencias_apresentacao = _deduplicar(
             gtin_matches + apresentacao_matches,
             ("registro_apresentacao", "produto", "apresentacao", "tarja"),

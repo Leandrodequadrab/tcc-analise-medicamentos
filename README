@@ -1,6 +1,34 @@
-inicializar o .venv: Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\.venv\Scripts\Activate.ps1
+# Análise de padrões em vendas de medicamentos
 
-dependencias db# 
+Aplicação acadêmica para analisar um relatório Rel_0024 de cada vez e sinalizar aumentos atípicos no histórico de vendas. Os resultados são indicadores para avaliação contextual, não diagnóstico clínico.
+
+## Requisitos e instalação
+
+Requer Python 3 e PostgreSQL com o banco `tcc_medicamentos` configurado.
+
+No PowerShell, a partir da raiz do repositório:
+
+```powershell
+Set-Location .\TCC
+python -m venv .venv
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+Edite `TCC/.env` com os dados locais do PostgreSQL (`DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` e `DB_NAME`). Não versionar esse arquivo.
+
+## Cadastro DCB local
+
+O arquivo `TCC/dados/cadastro_dcb_farmacia.csv` é um catálogo auxiliar necessário para agrupar produtos com DCB válida. Ele contém dados locais e não acompanha o repositório; obtenha-o por meio autorizado e mantenha-o fora do Git.
+
+## Executar
+
+Ainda na pasta `TCC`:
+
+```powershell
+python app.py
+```
+
+Abra `http://127.0.0.1:5000/nova-analise` e envie um relatório Rel_0024 em formato `.xls` ou `.xlsx`. Cada upload é processado isoladamente; suas vendas não são inseridas nas tabelas consolidadas. A aplicação consulta o catálogo operacional local em modo somente leitura e usa o CSV DCB como referência auxiliar.

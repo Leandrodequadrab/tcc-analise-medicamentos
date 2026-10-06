@@ -87,8 +87,6 @@ def criar_e_verificar_estrutura():
         inspetor = inspect(engine)
         tabelas_antes = set(inspetor.get_table_names())
 
-        # checkfirst evita recriar tabelas que já existam. A lista limita o
-        # comando a produtos, vendas_reais e itens_venda.
         TABELAS_DADOS_REAIS[0].metadata.create_all(
             bind=engine,
             tables=list(TABELAS_DADOS_REAIS),

@@ -1,0 +1,102 @@
+.nova-analise-page {
+    --app-primary: #155a9a;
+    --app-primary-hover: #104878;
+    --app-primary-soft: #eaf2f9;
+    --app-bg: #f4f6f8;
+    --app-surface: #fff;
+    --app-text: #263442;
+    --app-muted: #687583;
+    --app-border: #dfe5eb;
+    --app-attention: #a52e38;
+    --app-shadow: 0 3px 14px rgb(35 55 75 / 6%);
+}
+
+.nova-analise-page .navbar,
+.nova-analise-page .app-navbar { background: #155a9a; }
+.nova-analise-page .section-kicker,
+.nova-analise-page .app-eyebrow { color: #155a9a; }
+.nova-analise-page .btn-primary {
+    --bs-btn-bg: #155a9a;
+    --bs-btn-border-color: #155a9a;
+    --bs-btn-hover-bg: #104878;
+    --bs-btn-hover-border-color: #104878;
+    --bs-btn-active-bg: #104878;
+    --bs-btn-active-border-color: #104878;
+}
+.nova-analise-page .app-metric-value { color: #155a9a; }
+.nova-analise-page .app-metric-highlight { border-top: 3px solid #c94048; }
+.nova-analise-page .app-metric-highlight .app-metric-value { color: #b8323b; }
+.nova-analise-page .app-upload-zone {
+    max-width: 920px;
+    margin-inline: auto;
+    border-color: #a8bfd4;
+    background: #f9fbfd;
+}
+.nova-analise-page .upload-panel .card-body { max-width: 1080px; margin-inline: auto; }
+.nova-analise-page .period-guidance {
+    padding: .85rem 1rem;
+    border-left: 3px solid #155a9a;
+    border-radius: 8px;
+    background: #f0f4f8;
+    color: #435262;
+}
+.nova-analise-page .period-guidance h3 { color: #155a9a; }
+.nova-analise-page .form-control:focus,
+.nova-analise-page .form-select:focus {
+    border-color: #78a5ca;
+    box-shadow: 0 0 0 .22rem rgb(21 90 154 / 16%);
+}
+.nova-analise-page :focus-visible { outline-color: #c94048; }
+.nova-analise-page .app-note {
+    border-left-color: #c94048;
+    background: #f8f1f1;
+    color: #59484a;
+}
+.nova-analise-page .table { --bs-table-hover-bg: #f1f5f8; }
+.nova-analise-page .table thead th { color: #536476; }
+.nova-analise-page .product-name { min-width: 190px; }
+.nova-analise-page .technical-details {
+    min-width: min(20rem, 70vw);
+    padding: .7rem .8rem;
+    border: 1px solid #e2e7ec;
+    border-radius: 8px;
+    background: #f7f8fa;
+    line-height: 1.65;
+}
+.nova-analise-page .app-processing.loading-overlay {
+    position: fixed;
+    z-index: 2000;
+    inset: 0;
+    display: none;
+    place-items: center;
+    padding: 1rem;
+    background: rgb(28 43 59 / 48%);
+    backdrop-filter: blur(3px);
+}
+.nova-analise-page .app-processing.loading-overlay.is-visible { display: grid; }
+.nova-analise-page .loading-card {
+    width: min(100%, 390px);
+    padding: 2rem;
+    border: 1px solid #e3e8ed;
+    border-radius: 16px;
+    background: #fff;
+}
+.nova-analise-page .app-spinner {
+    border-color: #dce7f0;
+    border-top-color: #155a9a;
+}
+.nova-analise-page #mensagem-processamento { transition: opacity .2s ease; }
+.nova-analise-page #mensagem-processamento.is-changing { opacity: .25; }
+
+@media (max-width: 991.98px) {
+    .nova-analise-page #filtros-aumentos > div { min-width: 0; }
+    .nova-analise-page .product-name { min-width: 165px; }
+}
+@media (max-width: 575.98px) {
+    .nova-analise-page main.container { padding-top: 1.4rem !important; }
+    .nova-analise-page .app-chart { height: 290px; }
+    .nova-analise-page .table-responsive { overflow-x: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .nova-analise-page #mensagem-processamento { transition: none; }
+}

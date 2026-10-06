@@ -15,7 +15,7 @@ import sys
 from sqlalchemy import create_engine, func, inspect, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from database import Venda, obter_url_banco_aplicacao
+from database import obter_url_banco_aplicacao
 from models.rel0024 import CadastroProdutoFarmacia, ProdutoRel0024
 from utils.classificacao_medicamentos import (
     CLASSIFICACOES_MED,
@@ -278,8 +278,6 @@ def _enriquecer_catalogo_tcc(conexao):
                 "O catálogo Rel_0024 mudou durante o enriquecimento; rollback."
             )
     contagens = Counter(linha["classificacao_operacional"] for linha in catalogo)
-    # Reconta os valores planejados, inclusive para linhas que precisaram ser
-    # preservadas por divergência, de modo que o relatório reflita o banco.
     por_id = {item["id"]: item for item in catalogo}
     for item in alteracoes:
         por_id[item["id"]] = {
@@ -325,7 +323,6 @@ def executar():
             estado_antes = dict(tcc.execute(SQL_ESTADO).mappings().one())
             _validar_estado(estado_antes, "antes da sincronização")
 
-            # DDL transacional no destino local; nunca executado no sgfpod1.
             CadastroProdutoFarmacia.metadata.create_all(
                 bind=tcc,
                 tables=[CadastroProdutoFarmacia.__table__],

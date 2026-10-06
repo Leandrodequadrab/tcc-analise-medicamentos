@@ -90,7 +90,6 @@ body {
 .app-spinner { width: 2.2rem; height: 2.2rem; border: .25rem solid #dceae2; border-top-color: var(--app-primary); border-radius: 50%; animation: app-spin .8s linear infinite; }
 @keyframes app-spin { to { transform: rotate(360deg); } }
 
-/* Legado da importação recebe o mesmo conjunto de cores e superfícies. */
 .links-navegacao { gap: .75rem; }
 .link-dashboard { color: var(--app-primary); }
 .legacy-admin.container { width: auto; margin: 0 auto; text-align: left; }
