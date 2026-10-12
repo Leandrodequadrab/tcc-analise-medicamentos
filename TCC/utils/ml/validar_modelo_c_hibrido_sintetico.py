@@ -71,10 +71,10 @@ INTEGRIDADE_ESPERADA = {
     "divergencias_descricao": 1,
 }
 UNIVERSO_ESPERADO = {
-    "chaves": 1094,
-    "modelaveis": 520,
-    "historico_insuficiente": 574,
-    "observacoes": 26342,
+    "chaves": 932,
+    "modelaveis": 415,
+    "historico_insuficiente": 517,
+    "observacoes": 19010,
 }
 
 BASELINE_ANTIGO = {
@@ -131,10 +131,8 @@ def validar_controle_hibrido(controle, diagnostico):
         raise ErroModelo(
             f"Universo híbrido diverge do Modelo C validado: {atual}."
         )
-    if resumo["quantidade_elegivel_antes"] != 100902.0 or resumo[
-        "quantidade_agregada"
-    ] != 100902.0:
-        raise ErroModelo("A soma elegível deve fechar em 100.902 unidades.")
+    if resumo["quantidade_elegivel_antes"] != resumo["quantidade_agregada"]:
+        raise ErroModelo("A soma elegível não foi conservada na agregação.")
     if controle.duplicated(CHAVES_OBSERVACAO).any():
         raise ErroModelo("Há observações híbridas chave-data duplicadas.")
     if controle["chave_analitica"].isna().any():
@@ -175,16 +173,25 @@ def selecionar_injecoes(controle):
             list(CHAVES_SERIE), sort=False, dropna=False
         )
     ]
-    if len(indices_por_chave) < TOTAL_INJECOES:
-        raise ErroModelo(
-            f"Amostra insuficiente: há {len(indices_por_chave)} chaves com "
-            f"candidatos para {TOTAL_INJECOES} injeções distintas."
-        )
-
+    total_injecoes = min(TOTAL_INJECOES, len(indices_por_chave))
+    if total_injecoes == 0:
+        raise ErroModelo("Nenhuma chave possui candidato válido para injeção.")
     indices_selecionados = rng.choice(
-        np.asarray(indices_por_chave), size=TOTAL_INJECOES, replace=False
+        np.asarray(indices_por_chave), size=total_injecoes, replace=False
     )
-    fatores = np.repeat(list(FATORES), INJECOES_POR_FATOR).astype(object)
+    base_por_fator, resto = divmod(total_injecoes, len(FATORES))
+    quantidades_por_fator = [
+        base_por_fator + (1 if indice < resto else 0)
+        for indice, _ in enumerate(FATORES)
+    ]
+    fatores = np.concatenate(
+        [
+            np.repeat(fator, quantidade)
+            for (fator, _), quantidade in zip(
+                FATORES.items(), quantidades_por_fator, strict=True
+            )
+        ]
+    ).astype(object)
     rng.shuffle(fatores)
     plano = pd.DataFrame(
         {
@@ -361,12 +368,17 @@ def _executar_experimento(controle):
             }
         )
     por_fator = pd.DataFrame(linhas_por_fator)
-    if len(plano) != TOTAL_INJECOES:
-        raise ErroModelo("A validação precisa conter exatamente 450 injeções.")
-    if plano[list(CHAVES_SERIE)].drop_duplicates().shape[0] != TOTAL_INJECOES:
-        raise ErroModelo("A amostra deve conter 450 chaves analíticas distintas.")
-    if por_fator["injetadas"].tolist() != [150, 150, 150]:
-        raise ErroModelo("A distribuição por fator deve ser 150/150/150.")
+    base_por_fator, resto = divmod(len(plano), len(FATORES))
+    quantidades_por_fator = [
+        base_por_fator + (1 if indice < resto else 0)
+        for indice, _ in enumerate(FATORES)
+    ]
+    if len(plano) > TOTAL_INJECOES:
+        raise ErroModelo("A validação excedeu o máximo protocolar de 450 injeções.")
+    if plano[list(CHAVES_SERIE)].drop_duplicates().shape[0] != len(plano):
+        raise ErroModelo("Há mais de uma injeção por chave analítica.")
+    if por_fator["injetadas"].tolist() != quantidades_por_fator:
+        raise ErroModelo("A distribuição das injeções entre fatores divergiu do plano.")
 
     por_tipo = []
     for tipo in ("DCB", "PRODUTO"):
@@ -382,8 +394,8 @@ def _executar_experimento(controle):
             }
         )
     metricas = calcular_metricas(resultado, plano)
-    if int(injetados.sum()) != TOTAL_INJECOES:
-        raise ErroModelo("A máscara não contabilizou as 450 injeções.")
+    if int(injetados.sum()) != len(plano):
+        raise ErroModelo("A máscara de injeções divergiu do plano selecionado.")
     return {
         "modelo": modelo,
         "experimento": experimento,
@@ -478,6 +490,57 @@ def executar_validacao_hibrida():
     if not reproducibilidade["resultados_identicos"]:
         raise ErroModelo("A validação sintética híbrida não foi reproduzível.")
 
+    cadastro_sem_filtro_continuo = carregar_cadastro_dcb().drop(
+        columns=["cod_tipo"], errors="ignore"
+    )
+    diagnostico_com_continuos = construir_diagnostico_chave(
+        dados["serie_vendas"],
+        dados["catalogo_classificado"],
+        cadastro_sem_filtro_continuo,
+    )
+    controle_com_continuos_pipeline = executar_modelo_c_hibrido_em_diagnostico(
+        diagnostico_com_continuos
+    )
+    controle_com_continuos = controle_com_continuos_pipeline[
+        "resultado"
+    ].reset_index(drop=True).copy(deep=True)
+    experimento_com_continuos = _executar_experimento(controle_com_continuos)
+    repeticao_com_continuos = _executar_experimento(controle_com_continuos)
+    reproducibilidade_com_continuos = verificar_reprodutibilidade(
+        experimento_com_continuos, repeticao_com_continuos
+    )
+    if not reproducibilidade_com_continuos["resultados_identicos"]:
+        raise ErroModelo(
+            "A validação comparativa com uso contínuo não foi reproduzível."
+        )
+
+    # Cenário intermediário: exclui uso contínuo, mas mantém tipos 15/102.
+    cadastro_sem_filtro_antimicrobiano = carregar_cadastro_dcb().copy(deep=True)
+    tipos_auxiliares = cadastro_sem_filtro_antimicrobiano["cod_tipo"].astype(
+        "string"
+    ).str.strip()
+    cadastro_sem_filtro_antimicrobiano.loc[
+        tipos_auxiliares.isin({"15", "102"}), "cod_tipo"
+    ] = pd.NA
+    diagnostico_regra_anterior = construir_diagnostico_chave(
+        dados["serie_vendas"],
+        dados["catalogo_classificado"],
+        cadastro_sem_filtro_antimicrobiano,
+    )
+    pipeline_regra_anterior = executar_modelo_c_hibrido_em_diagnostico(
+        diagnostico_regra_anterior
+    )
+    controle_regra_anterior = pipeline_regra_anterior["resultado"].reset_index(
+        drop=True
+    ).copy(deep=True)
+    experimento_regra_anterior = _executar_experimento(controle_regra_anterior)
+    repeticao_regra_anterior = _executar_experimento(controle_regra_anterior)
+    reproducibilidade_regra_anterior = verificar_reprodutibilidade(
+        experimento_regra_anterior, repeticao_regra_anterior
+    )
+    if not reproducibilidade_regra_anterior["resultados_identicos"]:
+        raise ErroModelo("A validação do cenário intermediário não foi reproduzível.")
+
     integridade_depois = _integridade_banco()
     if integridade_depois != integridade_antes:
         raise ErroModelo("A validação alterou a integridade do banco.")
@@ -507,7 +570,62 @@ def executar_validacao_hibrida():
                     },
                 ]
             ),
+            "comparacao_com_uso_continuo": pd.DataFrame(
+                [
+                    {
+                        "cenario": "com uso contínuo (baseline comparável)",
+                        "chaves": len(
+                            diagnostico_com_continuos["catalogo_chaves"]
+                            .loc[:, list(CHAVES_SERIE)]
+                            .drop_duplicates()
+                        ),
+                        "modelaveis": int(
+                            controle_com_continuos[list(CHAVES_SERIE)]
+                            .drop_duplicates()
+                            .shape[0]
+                        ),
+                        "observacoes": len(controle_com_continuos),
+                        "outliers": int(controle_com_continuos["anomalia"].sum()),
+                        "aumentos_atipicos": int(
+                            controle_com_continuos["aumento_atipico"].sum()
+                        ),
+                        "injecoes": len(experimento_com_continuos["plano"]),
+                        "TP": experimento_com_continuos["metricas"]["TP"],
+                        "FP": experimento_com_continuos["metricas"]["FP"],
+                        "FN": experimento_com_continuos["metricas"]["FN"],
+                        "TN": experimento_com_continuos["metricas"]["TN"],
+                        "precision": experimento_com_continuos["metricas"]["precision"],
+                        "recall": experimento_com_continuos["metricas"]["recall"],
+                        "f1": experimento_com_continuos["metricas"]["f1"],
+                        "specificity": experimento_com_continuos["metricas"]["specificity"],
+                    },
+                    {
+                        "cenario": "sem uso contínuo (regra final)",
+                        "chaves": universo["chaves"],
+                        "modelaveis": universo["modelaveis"],
+                        "observacoes": universo["observacoes"],
+                        "outliers": int(controle["anomalia"].sum()),
+                        "aumentos_atipicos": int(controle["aumento_atipico"].sum()),
+                        "injecoes": len(primeiro["plano"]),
+                        "TP": primeiro["metricas"]["TP"],
+                        "FP": primeiro["metricas"]["FP"],
+                        "FN": primeiro["metricas"]["FN"],
+                        "TN": primeiro["metricas"]["TN"],
+                        "precision": primeiro["metricas"]["precision"],
+                        "recall": primeiro["metricas"]["recall"],
+                        "f1": primeiro["metricas"]["f1"],
+                        "specificity": primeiro["metricas"]["specificity"],
+                    },
+                ]
+            ),
             "reprodutibilidade": reproducibilidade,
+            "reprodutibilidade_com_uso_continuo": reproducibilidade_com_continuos,
+            "recall_por_fator_com_uso_continuo": experimento_com_continuos[
+                "recall_por_fator"
+            ],
+            "resultados_por_tipo_com_uso_continuo": experimento_com_continuos[
+                "resultados_por_tipo"
+            ],
             "universo": universo,
             "integridade_antes": integridade_antes,
             "integridade_depois": integridade_depois,
@@ -516,6 +634,57 @@ def executar_validacao_hibrida():
             "parametros": controle_pipeline["modelo"].get_params(deep=False),
         }
     )
+    def linha_cenario(nome, diag, observacoes, experimento):
+        catalogo_chaves = diag["catalogo_chaves"]
+        chaves = catalogo_chaves.loc[:, list(CHAVES_SERIE)].drop_duplicates()
+        modelaveis = observacoes.loc[:, list(CHAVES_SERIE)].drop_duplicates()
+        metricas = experimento["metricas"]
+        return {
+            "cenario": nome,
+            "produtos_elegiveis": int(
+                catalogo_chaves[["filial", "codigo_produto"]]
+                .drop_duplicates()
+                .shape[0]
+            ),
+            "chaves": int(len(chaves)),
+            "modelaveis": int(len(modelaveis)),
+            "historico_insuficiente": int(len(chaves) - len(modelaveis)),
+            "observacoes": int(len(observacoes)),
+            "outliers": int(observacoes["anomalia"].sum()),
+            "aumentos_atipicos": int(observacoes["aumento_atipico"].sum()),
+            "injecoes": int(len(experimento["plano"])),
+            **{
+                campo: metricas[campo]
+                for campo in (
+                    "TP", "FP", "FN", "TN", "precision", "recall",
+                    "f1", "specificity",
+                )
+            },
+        }
+
+    primeiro["comparacao_tres_cenarios"] = pd.DataFrame(
+        [
+            linha_cenario(
+                "Com uso contínuo e antimicrobianos",
+                diagnostico_com_continuos,
+                controle_com_continuos,
+                experimento_com_continuos,
+            ),
+            linha_cenario(
+                "Sem uso contínuo, com antimicrobianos",
+                diagnostico_regra_anterior,
+                controle_regra_anterior,
+                experimento_regra_anterior,
+            ),
+            linha_cenario(
+                "Final: sem uso contínuo e sem antimicrobianos",
+                diagnostico,
+                controle,
+                primeiro,
+            ),
+        ]
+    )
+    primeiro["reprodutibilidade_regra_anterior"] = reproducibilidade_regra_anterior
     return primeiro
 
 
@@ -563,6 +732,17 @@ def imprimir_relatorio(relatorio):
     print(relatorio["resultados_por_tipo"].to_string(index=False))
     print("\n6. CONTROLE × EXPERIMENTO")
     print(relatorio["comparacao"].to_string(index=False))
+    print("\n6A. COMPARAÇÃO DOS TRÊS CENÁRIOS")
+    print(relatorio["comparacao_tres_cenarios"].to_string(index=False))
+
+    print("\n6A. COMPARAÇÃO ANTERIOR × FINAL (COM/SEM USO CONTÍNUO)")
+    print(relatorio["comparacao_com_uso_continuo"].to_string(index=False))
+    print("Reprodutibilidade do cenário anterior:")
+    print(relatorio["reprodutibilidade_com_uso_continuo"])
+    print("Recall por fator no cenário anterior:")
+    print(relatorio["recall_por_fator_com_uso_continuo"].to_string(index=False))
+    print("Resultados por tipo de chave no cenário anterior:")
+    print(relatorio["resultados_por_tipo_com_uso_continuo"].to_string(index=False))
 
     print("\n7. COMPARAÇÃO QUANTITATIVA COM O BASELINE ANTIGO POR PRODUTO")
     for campo in ("TP", "FP", "FN", "TN"):

@@ -118,6 +118,26 @@ class TestModeloCChaveAnalitica(unittest.TestCase):
         self.assertTrue((resultado["vendas_positivas_anteriores"] >= 7).all())
         self.assertTrue((resultado["data"] >= pd.Timestamp("2026-01-29")).all())
 
+    def test_uso_continuo_e_antimicrobianos_nao_chegam_ao_modelo(self):
+        produtos = self.produtos.copy(deep=True)
+        cadastro = self.cadastro_dcb.copy(deep=True)
+        cadastro["cod_tipo"] = None
+        cadastro.loc[cadastro["cod_reduzido"] == "101", "cod_tipo"] = "36"
+        cadastro.loc[cadastro["cod_reduzido"] == "102", "cod_tipo"] = "15"
+        cadastro.loc[cadastro["cod_reduzido"] == "202", "cod_tipo"] = "10"
+        cadastro.loc[cadastro["cod_reduzido"] == "303", "cod_tipo"] = "102"
+
+        diagnostico = construir_diagnostico_chave(
+            self.vendas, produtos, cadastro
+        )
+        catalogo_modelado = diagnostico["catalogo_chaves"]
+        self.assertEqual(catalogo_modelado["codigo_produto"].tolist(), [202])
+        self.assertEqual(set(catalogo_modelado["codigo_produto"]), {202})
+        resultado = executar_modelo_c_hibrido_em_diagnostico(diagnostico)[
+            "resultado"
+        ]
+        self.assertEqual(set(resultado["codigos_produto"].explode()), {202})
+
     def test_features_de_uma_data_nao_usam_quantidades_futuras(self):
         alteradas = self.vendas.copy()
         alteradas.loc[

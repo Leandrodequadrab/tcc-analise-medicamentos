@@ -10,7 +10,11 @@ import numpy as np
 import pandas as pd
 from sqlalchemy import bindparam, text
 from werkzeug.utils import secure_filename
-from utils.chave_analitica import carregar_cadastro_dcb
+from utils.chave_analitica import (
+    anotar_antimicrobianos,
+    anotar_uso_continuo,
+    carregar_cadastro_dcb,
+)
 from utils.ml.modelo_c_chave_analitica import (
     CHAVES_SERIE as CHAVES_HIBRIDAS,
     construir_diagnostico_chave,
@@ -126,6 +130,25 @@ def _serie_diaria_elegivel(itens, catalogo):
             "O arquivo contém quantidade negativa em movimento Venda; revise o relatório."
         )
 
+    vendas = vendas.merge(
+        catalogo[
+            [
+                "filial",
+                "codigo_produto",
+                "elegivel_analise_automedicacao",
+                "uso_continuo",
+                "antimicrobiano",
+            ]
+        ],
+        on=["filial", "codigo_produto"],
+        how="left",
+        validate="many_to_one",
+    )
+    vendas = vendas.loc[
+        vendas["elegivel_analise_automedicacao"].fillna(False)
+        & ~vendas["uso_continuo"].fillna(False)
+        & ~vendas["antimicrobiano"].fillna(False)
+    ]
     diaria = (
         vendas.groupby(["filial", "codigo_produto", "data"], as_index=False)
         .agg(quantidade_total=("quantidade", "sum"))
@@ -136,9 +159,7 @@ def _serie_diaria_elegivel(itens, catalogo):
         how="left",
         validate="many_to_one",
     )
-    return diaria.loc[
-        diaria["elegivel_analise_automedicacao"].fillna(False)
-    ].copy()
+    return diaria
 
 
 def analisar_dados_rel0024(
@@ -161,9 +182,38 @@ def analisar_dados_rel0024(
         metadados_catalogo,
         filial,
     )
+    try:
+        cadastro_dcb = carregar_cadastro_dcb()
+    except (OSError, ValueError) as erro:
+        raise ErroNovaAnalise(
+            "O cadastro auxiliar local não pôde ser validado. "
+            "Confira o arquivo e suas colunas obrigatórias.",
+            status_http=503,
+        ) from erro
+    catalogo = anotar_uso_continuo(catalogo, cadastro_dcb)
+    catalogo = anotar_antimicrobianos(catalogo, cadastro_dcb)
     total_produtos = len(catalogo)
-    produtos_elegiveis = int(
+    produtos_elegiveis_antes = int(
         catalogo["elegivel_analise_automedicacao"].sum()
+    )
+    produtos_uso_continuo_excluidos = int(
+        (
+            catalogo["elegivel_analise_automedicacao"]
+            & catalogo["uso_continuo"]
+        ).sum()
+    )
+    produtos_apos_uso_continuo = (
+        produtos_elegiveis_antes - produtos_uso_continuo_excluidos
+    )
+    produtos_antimicrobianos_excluidos = int(
+        (
+            catalogo["elegivel_analise_automedicacao"]
+            & ~catalogo["uso_continuo"]
+            & catalogo["antimicrobiano"]
+        ).sum()
+    )
+    produtos_elegiveis = (
+        produtos_apos_uso_continuo - produtos_antimicrobianos_excluidos
     )
     produtos_inelegiveis = total_produtos - produtos_elegiveis
     classificacoes = Counter(catalogo["classificacao_operacional"].astype(str))
@@ -173,14 +223,6 @@ def analisar_dados_rel0024(
     if not serie_vendas.empty:
         produtos_chave = catalogo.copy()
         produtos_chave["descricao"] = produtos_chave["descricao_original"]
-        try:
-            cadastro_dcb = carregar_cadastro_dcb()
-        except (OSError, ValueError) as erro:
-            raise ErroNovaAnalise(
-                "O cadastro auxiliar DCB não pôde ser validado. "
-                "Confira o arquivo local e suas associações.",
-                status_http=503,
-            ) from erro
         diagnostico = construir_diagnostico_chave(
             serie_vendas,
             produtos_chave,
@@ -329,7 +371,11 @@ def analisar_dados_rel0024(
         },
         "metricas": {
             "produtos_encontrados": total_produtos,
+            "produtos_elegiveis_antes": produtos_elegiveis_antes,
             "produtos_elegiveis": produtos_elegiveis,
+            "produtos_uso_continuo_excluidos": produtos_uso_continuo_excluidos,
+            "produtos_apos_uso_continuo": produtos_apos_uso_continuo,
+            "produtos_antimicrobianos_excluidos": produtos_antimicrobianos_excluidos,
             "produtos_inelegiveis": produtos_inelegiveis,
             "produtos_modelaveis": produtos_modelaveis,
             "produtos_historico_insuficiente": produtos_elegiveis - produtos_modelaveis,

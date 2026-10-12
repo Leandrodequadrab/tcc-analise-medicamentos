@@ -30,7 +30,8 @@
                 <aside class="period-guidance mb-4" role="note">
                     <h3 class="h6 mb-1">Sobre o período do relatório</h3>
                     <p class="small mb-1">O modelo usa o histórico anterior de vendas. Cada série precisa ter pelo menos 7 dias anteriores com vendas positivas para ser analisada. Relatórios mais longos tendem a oferecer mais histórico e permitir analisar mais medicamentos.</p>
-                    <p class="small mb-0">Arquivos com períodos curtos continuam aceitos, mas podem apresentar mais séries com histórico insuficiente.</p>
+                    <p class="small mb-1">Arquivos com períodos curtos continuam aceitos, mas podem apresentar mais séries com histórico insuficiente.</p>
+                    <p class="small mb-0">Produtos classificados como uso contínuo no cadastro da farmácia (tipos 36, 44 e 56) são excluídos da análise.</p>
                 </aside>
                 <h2 id="titulo-envio" class="h5 mb-1">Selecione seu relatório</h2>
                 <p class="text-secondary small mb-3">Cada relatório é analisado individualmente utilizando apenas o histórico contido no próprio arquivo.</p>
@@ -80,7 +81,7 @@
                     <div class="alert alert-info" role="status">Nenhum produto elegível foi encontrado neste relatório segundo a classificação operacional disponível.</div>
                 {% endif %}
 
-                <aside class="app-note mb-4" role="note">Os aumentos atípicos representam comportamentos identificados pelo modelo como diferentes do histórico anterior e requerem avaliação contextual.</aside>
+                <aside class="app-note mb-4" role="note">Os aumentos atípicos representam comportamentos identificados pelo modelo como diferentes do histórico anterior e requerem avaliação contextual. Medicamentos classificados como de uso contínuo ou antimicrobianos no cadastro são excluídos da análise.</aside>
             </section>
 
             <section class="card app-panel mb-4" aria-labelledby="titulo-grafico-principal">
@@ -152,6 +153,8 @@
                         <caption class="visually-hidden">Métricas complementares da análise</caption>
                         <tbody>
                             <tr><th scope="row">Produtos encontrados</th><td>{{ resultado.metricas.produtos_encontrados }}</td><th scope="row">Produtos elegíveis</th><td>{{ resultado.metricas.produtos_elegiveis }}</td></tr>
+                            <tr><th scope="row">Uso contínuo excluído</th><td>{{ resultado.metricas.produtos_uso_continuo_excluidos }} <span class="text-secondary">(cod_tipo 36, 44, 56)</span></td><th scope="row">Elegíveis antes das exclusões</th><td>{{ resultado.metricas.produtos_elegiveis_antes }}</td></tr>
+                            <tr><th scope="row">Antimicrobianos excluídos</th><td>{{ resultado.metricas.produtos_antimicrobianos_excluidos }} <span class="text-secondary">(cod_tipo 15, 102)</span></td><th scope="row">Elegíveis após uso contínuo</th><td>{{ resultado.metricas.produtos_apos_uso_continuo }}</td></tr>
                             <tr><th scope="row">Chaves analíticas</th><td>{{ resultado.metricas.chaves_analiticas }}</td><th scope="row">Chaves modeláveis</th><td>{{ resultado.metricas.chaves_modelaveis }}</td></tr>
                             <tr><th scope="row">Chaves com histórico insuficiente</th><td>{{ resultado.metricas.chaves_historico_insuficiente }}</td><th scope="row">Observações modeláveis</th><td>{{ resultado.metricas.observacoes_avaliadas }}</td></tr>
                             <tr><th scope="row">Produtos representados em chaves modeláveis</th><td>{{ resultado.metricas.produtos_modelaveis }}</td><th scope="row">Produtos com histórico insuficiente</th><td>{{ resultado.metricas.produtos_historico_insuficiente }}</td></tr>
@@ -166,7 +169,7 @@
                     </div>
                     <hr>
                     <h3 class="h6">Como interpretar</h3>
-                    <p class="small text-secondary">A classificação operacional usa o tipo cadastral local e não confirma enquadramento regulatório ou automedicação. Quando há DCB válida no cadastro auxiliar local, produtos associados à mesma DCB são consolidados; sem DCB, cada código permanece em uma série individual. O histórico é construído somente com as datas deste arquivo. Devoluções participam da validação estrutural, mas não entram nas séries de venda.</p>
+                    <p class="small text-secondary">A classificação operacional usa o tipo cadastral local e não confirma enquadramento regulatório ou automedicação. Produtos de uso contínuo (cod_tipo 36, 44 e 56) e antimicrobianos (cod_tipo 15 e 102) são excluídos antes da agregação e da criação das chaves. Quando há DCB válida no cadastro auxiliar local, produtos restantes associados à mesma DCB são consolidados; sem DCB, cada código permanece em uma série individual. O histórico é construído somente com as datas deste arquivo. Devoluções participam da validação estrutural, mas não entram nas séries de venda.</p>
                     <details><summary class="small">Metadados do processamento</summary><p class="small text-secondary mt-2 mb-0">SHA-256 do arquivo: <code>{{ resultado.sha256 }}</code>. Resultados calculados em memória e não persistidos.</p></details>
                 </div>
             </details>

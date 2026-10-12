@@ -3,6 +3,11 @@ import unittest
 import pandas as pd
 
 from utils.chave_analitica import (
+    CODIGOS_TIPO_ANTIMICROBIANO,
+    CODIGOS_TIPO_USO_CONTINUO,
+    anotar_antimicrobianos,
+    anotar_uso_continuo,
+    carregar_cadastro_dcb,
     criar_chaves_analiticas,
     normalizar_nome_dcb,
 )
@@ -143,6 +148,119 @@ class ChaveAnaliticaTestCase(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "mais de uma DCB válida"):
             criar_chaves_analiticas(self.produtos, cadastro)
+
+    def test_csv_mestre_local_tem_colunas_e_separador_esperados(self):
+        cadastro = carregar_cadastro_dcb()
+        self.assertTrue(
+            {
+                "cod_reduzido", "nom_produto", "cod_dcb", "nom_dcb",
+                "cod_tipo", "nom_tipo",
+            }.issubset(cadastro.columns)
+        )
+
+    def test_exclui_exclusivamente_tipos_36_44_56(self):
+        produtos = pd.DataFrame(
+            {"codigo_produto": [36, 44, 56, 57, 58, 59]}
+        )
+        cadastro = pd.DataFrame(
+            {
+                "cod_reduzido": ["36", "44", "56", "57", "58", "59"],
+                "cod_tipo": ["36", "44", "56", "10", "90", None],
+            }
+        )
+        anotados = anotar_uso_continuo(produtos, cadastro)
+        self.assertEqual(
+            anotados.loc[anotados["uso_continuo"], "codigo_produto"].tolist(),
+            [36, 44, 56],
+        )
+        self.assertFalse(anotados.loc[anotados.codigo_produto == 57, "uso_continuo"].item())
+        self.assertFalse(anotados.loc[anotados.codigo_produto == 58, "uso_continuo"].item())
+        self.assertFalse(anotados.loc[anotados.codigo_produto == 59, "uso_continuo"].item())
+        self.assertEqual(CODIGOS_TIPO_USO_CONTINUO, {"36", "44", "56"})
+
+    def test_exclui_tipos_antimicrobianos_15_e_102_sem_inferir_por_nome(self):
+        produtos = pd.DataFrame(
+            {
+                "codigo_produto": [401, 402, 403, 404, 405],
+                "descricao_original": [
+                    "AMOXICILINA",
+                    "PRODUTO COMUM",
+                    "PRODUTO COMUM",
+                    "ANTIBIOTICO NO NOME",
+                    "MEDICAMENTO CONTINUO",
+                ],
+                "elegivel_analise_automedicacao": [True] * 5,
+            }
+        )
+        cadastro = pd.DataFrame(
+            {
+                "cod_reduzido": ["401", "402", "403", "404", "405"],
+                "cod_tipo": ["15", "102", "10", None, "36"],
+                "cod_dcb": ["1", "2", "3", None, "5"],
+                "nom_dcb": ["DCB A", "DCB B", "DCB C", None, "DCB E"],
+            }
+        )
+        anotados = anotar_antimicrobianos(produtos, cadastro)
+        self.assertEqual(
+            anotados.loc[anotados.antimicrobiano, "codigo_produto"].tolist(),
+            [401, 402],
+        )
+        resultado = criar_chaves_analiticas(produtos, cadastro)
+        self.assertEqual(resultado.codigo_produto.tolist(), [403, 404])
+        self.assertEqual(CODIGOS_TIPO_ANTIMICROBIANO, {"15", "102"})
+
+    def test_antimicrobiano_em_dcb_mista_nao_remove_produto_restante(self):
+        produtos = pd.DataFrame(
+            [
+                {"codigo_produto": 501, "elegivel_analise_automedicacao": True},
+                {"codigo_produto": 502, "elegivel_analise_automedicacao": True},
+            ]
+        )
+        cadastro = pd.DataFrame(
+            [
+                {"cod_reduzido": "501", "cod_tipo": "15", "cod_dcb": "1", "nom_dcb": "SUBSTANCIA"},
+                {"cod_reduzido": "502", "cod_tipo": "10", "cod_dcb": "1", "nom_dcb": "SUBSTANCIA"},
+            ]
+        )
+        resultado = criar_chaves_analiticas(produtos, cadastro)
+        self.assertEqual(resultado.codigo_produto.tolist(), [502])
+        self.assertEqual(resultado.chave_analitica.tolist(), ["SUBSTANCIA"])
+
+    def test_exclusao_preserva_dcb_mista_e_nao_altera_entrada(self):
+        produtos = pd.DataFrame(
+            [
+                {"codigo_produto": 101, "elegivel_analise_automedicacao": True},
+                {"codigo_produto": 102, "elegivel_analise_automedicacao": True},
+            ]
+        )
+        cadastro = pd.DataFrame(
+            [
+                {"cod_reduzido": "101", "cod_dcb": "1", "nom_dcb": "A", "cod_tipo": "36"},
+                {"cod_reduzido": "102", "cod_dcb": "1", "nom_dcb": "A", "cod_tipo": "10"},
+            ]
+        )
+        original = produtos.copy(deep=True)
+        resultado = criar_chaves_analiticas(produtos, cadastro)
+        self.assertEqual(resultado.codigo_produto.tolist(), [102])
+        self.assertEqual(resultado.chave_analitica.tolist(), ["A"])
+        pd.testing.assert_frame_equal(produtos, original)
+
+    def test_decisao_nao_usa_nome_dcb_ou_descricao(self):
+        produtos = pd.DataFrame(
+            {
+                "codigo_produto": [201, 202],
+                "elegivel_analise_automedicacao": [True, True],
+                "descricao_original": ["USO CONTINUO", "PRODUTO COMUM"],
+            }
+        )
+        cadastro = pd.DataFrame(
+            [
+                {"cod_reduzido": "201", "cod_tipo": "10", "cod_dcb": "1", "nom_dcb": "CONTINUO"},
+                {"cod_reduzido": "202", "cod_tipo": "36", "cod_dcb": "2", "nom_dcb": "COMUM"},
+            ]
+        )
+        resultado = criar_chaves_analiticas(produtos, cadastro)
+        self.assertEqual(resultado.codigo_produto.tolist(), [201])
 
 
 if __name__ == "__main__":

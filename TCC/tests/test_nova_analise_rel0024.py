@@ -159,6 +159,37 @@ class NovaAnaliseRel0024TestCase(unittest.TestCase):
         self.assertIn(b'href="/nova-analise"', resposta.data)
         self.assertEqual(antes, depois)
 
+    def test_upload_exclui_antimicrobianos_antes_de_agregar_e_preserva_dcb_mista(self):
+        codigos = [60001, 60002, 60003]
+        itens, descricoes, validacao = _itens(60, codigos)
+        cadastro = pd.DataFrame(
+            [
+                {"cod_reduzido": "60001", "nom_produto": "A", "cod_dcb": "1", "nom_dcb": "SUBSTANCIA X", "cod_tipo": "15", "nom_tipo": "MED GENERICO ANTIMICROBIANO"},
+                {"cod_reduzido": "60002", "nom_produto": "B", "cod_dcb": "1", "nom_dcb": "SUBSTANCIA X", "cod_tipo": "102", "nom_tipo": "MED PROPAGADO ANTIMICROBIANO"},
+                {"cod_reduzido": "60003", "nom_produto": "C", "cod_dcb": "1", "nom_dcb": "SUBSTANCIA X", "cod_tipo": "10", "nom_tipo": "MED GENERICO"},
+            ]
+        )
+        with patch(
+            "utils.dados_reais.servico_nova_analise.carregar_cadastro_dcb",
+            return_value=cadastro,
+        ):
+            resultado = analisar_dados_rel0024(
+                itens,
+                descricoes,
+                _catalogo(codigos),
+                nome_arquivo="antimicrobianos.xlsx",
+                sha256="e" * 64,
+                validacao=validacao,
+            )
+
+        metricas = resultado["metricas"]
+        self.assertEqual(metricas["produtos_elegiveis_antes"], 3)
+        self.assertEqual(metricas["produtos_apos_uso_continuo"], 3)
+        self.assertEqual(metricas["produtos_antimicrobianos_excluidos"], 2)
+        self.assertEqual(metricas["produtos_elegiveis"], 1)
+        self.assertEqual(metricas["chaves_analiticas"], 1)
+        self.assertGreater(metricas["chaves_modelaveis"], 0)
+
     def test_produto_sem_catalogo_fica_sem_classificacao_e_inelegivel(self):
         itens, descricoes, validacao = _itens(5, [404404])
         resultado = analisar_dados_rel0024(

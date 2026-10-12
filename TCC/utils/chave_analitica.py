@@ -7,6 +7,11 @@ import pandas as pd
 
 
 COLUNAS_CADASTRO_DCB = {"cod_reduzido", "cod_dcb", "nom_dcb"}
+COLUNAS_CADASTRO_COMPLETO = {
+    "cod_reduzido", "nom_produto", "cod_dcb", "nom_dcb", "cod_tipo", "nom_tipo"
+}
+CODIGOS_TIPO_USO_CONTINUO = frozenset({"36", "44", "56"})
+CODIGOS_TIPO_ANTIMICROBIANO = frozenset({"15", "102"})
 COLUNAS_PRODUTOS = {
     "codigo_produto",
     "elegivel_analise_automedicacao",
@@ -35,10 +40,16 @@ def carregar_cadastro_dcb(caminho=None):
     origem = Path(caminho) if caminho is not None else CAMINHO_CADASTRO_DCB
     cadastro = pd.read_csv(
         origem,
-        dtype={"cod_reduzido": "string", "cod_dcb": "string", "nom_dcb": "string"},
+        sep=";",
+        dtype={
+            "cod_reduzido": "string",
+            "cod_dcb": "string",
+            "nom_dcb": "string",
+            "cod_tipo": "string",
+        },
         encoding="utf-8-sig",
     )
-    ausentes = COLUNAS_CADASTRO_DCB.difference(cadastro.columns)
+    ausentes = COLUNAS_CADASTRO_COMPLETO.difference(cadastro.columns)
     if ausentes:
         raise ValueError(
             "O cadastro DCB não contém as colunas obrigatórias: "
@@ -56,6 +67,75 @@ def _normalizar_codigo(valor):
     if re.fullmatch(r"\d+\.0+", codigo):
         codigo = codigo.split(".", 1)[0]
     return codigo or None
+
+
+def _mapa_codigos_continuos(cadastro_dcb):
+    """Retorna códigos de produto marcados como uso contínuo no catálogo local."""
+    return _mapa_codigos_por_tipo(
+        cadastro_dcb, CODIGOS_TIPO_USO_CONTINUO, "uso contínuo"
+    )
+
+
+def _mapa_codigos_por_tipo(cadastro_dcb, codigos_tipo, descricao):
+    """Mapeia produtos por cod_tipo do cadastro estruturado, sem inferências textuais."""
+
+    if not {"cod_reduzido", "cod_tipo"}.issubset(cadastro_dcb.columns):
+        return set()
+    tipos = cadastro_dcb[["cod_reduzido", "cod_tipo"]].copy()
+    tipos["_codigo_mapa"] = tipos["cod_reduzido"].map(_normalizar_codigo)
+    tipos["_cod_tipo_normalizado"] = tipos["cod_tipo"].map(_normalizar_codigo)
+    tipos = tipos.loc[tipos["_codigo_mapa"].notna()]
+    conflitos = tipos.groupby("_codigo_mapa")["_cod_tipo_normalizado"].nunique(
+        dropna=True
+    )
+    conflitos = conflitos.loc[conflitos > 1]
+    if not conflitos.empty:
+        raise ValueError(
+            f"O cadastro associa produtos a mais de um cod_tipo ({descricao}); "
+            "elegibilidade interrompida. Exemplos: "
+            + ", ".join(conflitos.index.astype(str).tolist()[:10])
+        )
+    return set(
+        tipos.loc[
+            tipos["_cod_tipo_normalizado"].isin(codigos_tipo), "_codigo_mapa"
+        ]
+    )
+def anotar_uso_continuo(produtos, cadastro_dcb=None):
+    """Acrescenta uma flag baseada exclusivamente no cod_tipo do cadastro local."""
+
+    if cadastro_dcb is None:
+        cadastro_dcb = carregar_cadastro_dcb()
+    if "codigo_produto" not in produtos.columns:
+        raise ValueError("Catálogo de produtos sem codigo_produto.")
+    codigos_continuos = _mapa_codigos_continuos(cadastro_dcb)
+    resultado = produtos.copy()
+    resultado["_codigo_uso_continuo"] = resultado["codigo_produto"].map(
+        _normalizar_codigo
+    )
+    resultado["uso_continuo"] = resultado["_codigo_uso_continuo"].isin(
+        codigos_continuos
+    )
+    return resultado.drop(columns="_codigo_uso_continuo")
+
+
+def anotar_antimicrobianos(produtos, cadastro_dcb=None):
+    """Marca tipos 15/102 do CSV estruturado, sem usar nome, DCB ou texto."""
+
+    if cadastro_dcb is None:
+        cadastro_dcb = carregar_cadastro_dcb()
+    if "codigo_produto" not in produtos.columns:
+        raise ValueError("Catálogo de produtos sem codigo_produto.")
+    codigos = _mapa_codigos_por_tipo(
+        cadastro_dcb, CODIGOS_TIPO_ANTIMICROBIANO, "antimicrobiano"
+    )
+    resultado = produtos.copy()
+    resultado["_codigo_antimicrobiano"] = resultado["codigo_produto"].map(
+        _normalizar_codigo
+    )
+    resultado["antimicrobiano"] = resultado["_codigo_antimicrobiano"].isin(
+        codigos
+    )
+    return resultado.drop(columns="_codigo_antimicrobiano")
 
 
 def _elegivel(valor):
@@ -133,6 +213,12 @@ def criar_chaves_analiticas(produtos, cadastro_dcb=None):
     if cadastro_dcb is None:
         cadastro_dcb = carregar_cadastro_dcb()
     mapa = _mapa_dcb_valida(cadastro_dcb)
+
+    resultado = anotar_uso_continuo(resultado, cadastro_dcb)
+    resultado = anotar_antimicrobianos(resultado, cadastro_dcb)
+    resultado = resultado.loc[
+        ~resultado["uso_continuo"] & ~resultado["antimicrobiano"]
+    ].copy()
 
     resultado = resultado.join(mapa, on="_codigo_mapa", how="left")
     possui_dcb = resultado["nom_dcb"].notna() & resultado["cod_dcb"].notna()

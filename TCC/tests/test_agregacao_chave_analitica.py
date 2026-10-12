@@ -145,6 +145,32 @@ class AgregacaoChaveAnaliticaTestCase(unittest.TestCase):
         self.assertEqual(codigos_com_venda, codigos_com_chave)
         self.assertTrue(vinculadas["chave_analitica"].notna().all())
 
+    def test_uso_continuo_fica_fora_da_agregacao_e_totais_fecham(self):
+        cadastro = self.cadastro_dcb.copy()
+        cadastro["cod_tipo"] = None
+        cadastro.loc[cadastro["cod_reduzido"] == "101", "cod_tipo"] = "36"
+        cadastro.loc[cadastro["cod_reduzido"] == "102", "cod_tipo"] = "10"
+        resultado = agregar_vendas_por_chave(
+            self.vendas, self.produtos, cadastro
+        )
+        codigos_incluidos = set(resultado["codigos_produto"].explode())
+        self.assertNotIn(101, codigos_incluidos)
+        self.assertIn(102, codigos_incluidos)
+        self.assertEqual(resultado["quantidade_dia"].sum(), 30)
+
+    def test_antimicrobiano_fica_fora_da_agregacao(self):
+        cadastro = self.cadastro_dcb.copy()
+        cadastro["cod_tipo"] = None
+        cadastro.loc[cadastro["cod_reduzido"] == "404", "cod_tipo"] = "15"
+        cadastro.loc[cadastro["cod_reduzido"] == "102", "cod_tipo"] = "102"
+        resultado = agregar_vendas_por_chave(
+            self.vendas, self.produtos, cadastro
+        )
+        codigos_incluidos = set(resultado["codigos_produto"].explode())
+        self.assertNotIn(404, codigos_incluidos)
+        self.assertNotIn(102, codigos_incluidos)
+        self.assertEqual(resultado["quantidade_dia"].sum(), 23)
+
     def test_resultado_e_deterministico(self):
         pd.testing.assert_frame_equal(self.agregar(), self.agregar())
 
