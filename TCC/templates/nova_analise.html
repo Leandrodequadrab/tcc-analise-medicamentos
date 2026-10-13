@@ -105,15 +105,13 @@
                             <div class="col-6 col-sm-8 col-md-3"><label class="form-label small mb-1" for="classificacao-aumentos">Classificação operacional</label><select class="form-select form-select-sm" id="classificacao-aumentos"><option value="">Todas</option></select></div>
                             <div class="col-6 col-md-3 col-xl-2"><label class="form-label small mb-1" for="data-inicial-aumentos">Data inicial</label><input class="form-control form-control-sm" type="date" id="data-inicial-aumentos"></div>
                             <div class="col-6 col-md-3 col-xl-2"><label class="form-label small mb-1" for="data-final-aumentos">Data final</label><input class="form-control form-control-sm" type="date" id="data-final-aumentos"></div>
-                            <div class="col-6 col-sm-6 col-md-3"><label class="form-label small mb-1" for="campo-ordenacao-aumentos">Ordenar por</label><select class="form-select form-select-sm" id="campo-ordenacao-aumentos"><option value="quantity">Quantidade atual</option><option value="difference">Diferença vs. média</option><option value="date">Data</option></select></div>
-                            <div class="col-6 col-sm-6 col-md-3"><label class="form-label small mb-1" for="direcao-ordenacao-aumentos">Ordem</label><select class="form-select form-select-sm" id="direcao-ordenacao-aumentos"><option value="desc">Maior → menor</option><option value="asc">Menor → maior</option></select></div>
                             <div class="col-6 col-sm-3 col-md-2 col-xl-1"><label class="form-label small mb-1" for="itens-pagina-aumentos">Por página</label><select class="form-select form-select-sm" id="itens-pagina-aumentos"><option value="10" selected>10</option><option value="25">25</option><option value="50">50</option></select></div>
                             <div class="col-6 col-md-auto"><button class="btn btn-sm btn-outline-secondary" type="button" id="limpar-filtros-aumentos">Limpar filtros</button></div>
                         </div>
                         <p id="estado-filtros-aumentos" class="small text-secondary mb-2" role="status" aria-live="polite"></p>
                         <div class="table-responsive"><table class="table table-hover align-middle mb-0" id="tabela-aumentos">
-                            <thead><tr><th scope="col">Data</th><th scope="col">Composição / produto</th><th scope="col">Tipo</th><th scope="col" class="text-end">Quantidade</th><th scope="col" class="text-end">Média histórica</th><th scope="col" class="text-end">Diferença</th><th scope="col">Detalhes</th></tr></thead>
-                            <tbody id="linhas-aumentos">{% for item in resultado.aumentos %}<tr data-date="{{ item.data }}" data-product="{{ item.produto|lower }} {{ item.nom_dcb|default('', true)|lower }} {{ item.descricoes_associadas|join(' ')|lower }}" data-code="{{ item.codigos_produto|join(' ') }}" data-type="{{ item.tipo_chave }}" data-classification="{{ item.classificacoes_operacionais|join('|') }}" data-quantity="{{ item.quantidade }}" data-difference="{{ item.diferenca }}">
+                            <thead><tr><th scope="col" aria-sort="none"><button type="button" class="table-sort-control" data-sort-column="data">Data <span class="table-sort-indicator" aria-hidden="true">↕</span></button></th><th scope="col">Composição / produto</th><th scope="col">Tipo</th><th scope="col" class="text-end" aria-sort="none"><button type="button" class="table-sort-control" data-sort-column="quantidade">Quantidade <span class="table-sort-indicator" aria-hidden="true">↕</span></button></th><th scope="col" class="text-end" aria-sort="none"><button type="button" class="table-sort-control" data-sort-column="media">Média histórica <span class="table-sort-indicator" aria-hidden="true">↕</span></button></th><th scope="col" class="text-end" aria-sort="none"><button type="button" class="table-sort-control" data-sort-column="diferenca">Diferença <span class="table-sort-indicator" aria-hidden="true">↕</span></button></th><th scope="col">Detalhes</th></tr></thead>
+                            <tbody id="linhas-aumentos">{% for item in resultado.aumentos %}<tr data-data="{{ item.data }}" data-product="{{ item.produto|lower }} {{ item.nom_dcb|default('', true)|lower }} {{ item.descricoes_associadas|join(' ')|lower }}" data-code="{{ item.codigos_produto|join(' ') }}" data-type="{{ item.tipo_chave }}" data-classification="{{ item.classificacoes_operacionais|join('|') }}" data-quantidade="{{ '%.17g'|format(item.quantidade) }}" data-media="{{ '%.17g'|format(item.media_historica) }}" data-diferenca="{{ '%.17g'|format(item.diferenca) }}">
                                 <td class="text-nowrap">{{ item.data[8:10] }}/{{ item.data[5:7] }}/{{ item.data[:4] }}</td>
                                 <td class="product-name"><span class="d-block fw-semibold">{% if item.tipo_chave == 'DCB' %}{{ item.nom_dcb }}{% else %}{{ item.produto }}{% endif %}</span>{% if item.tipo_chave == 'DCB' %}<small class="text-secondary">{{ item.produtos_associados }} produtos associados</small>{% else %}<small class="text-secondary">Código {{ item.codigo_produto }}</small>{% endif %}</td>
                                 <td><span class="badge text-bg-light border">{{ item.tipo_chave }}</span></td>
@@ -149,19 +147,51 @@
                 <summary class="card-body px-3 px-md-4">Ver detalhes da análise</summary>
                 <div class="card-body pt-0 px-3 px-md-4">
                     <h3 class="h6">Resumo complementar</h3>
-                    <div class="table-responsive mb-4"><table class="table table-sm align-middle">
-                        <caption class="visually-hidden">Métricas complementares da análise</caption>
-                        <tbody>
-                            <tr><th scope="row">Produtos encontrados</th><td>{{ resultado.metricas.produtos_encontrados }}</td><th scope="row">Produtos elegíveis</th><td>{{ resultado.metricas.produtos_elegiveis }}</td></tr>
-                            <tr><th scope="row">Uso contínuo excluído</th><td>{{ resultado.metricas.produtos_uso_continuo_excluidos }} <span class="text-secondary">(cod_tipo 36, 44, 56)</span></td><th scope="row">Elegíveis antes das exclusões</th><td>{{ resultado.metricas.produtos_elegiveis_antes }}</td></tr>
-                            <tr><th scope="row">Antimicrobianos excluídos</th><td>{{ resultado.metricas.produtos_antimicrobianos_excluidos }} <span class="text-secondary">(cod_tipo 15, 102)</span></td><th scope="row">Elegíveis após uso contínuo</th><td>{{ resultado.metricas.produtos_apos_uso_continuo }}</td></tr>
-                            <tr><th scope="row">Chaves analíticas</th><td>{{ resultado.metricas.chaves_analiticas }}</td><th scope="row">Chaves modeláveis</th><td>{{ resultado.metricas.chaves_modelaveis }}</td></tr>
-                            <tr><th scope="row">Chaves com histórico insuficiente</th><td>{{ resultado.metricas.chaves_historico_insuficiente }}</td><th scope="row">Observações modeláveis</th><td>{{ resultado.metricas.observacoes_avaliadas }}</td></tr>
-                            <tr><th scope="row">Produtos representados em chaves modeláveis</th><td>{{ resultado.metricas.produtos_modelaveis }}</td><th scope="row">Produtos com histórico insuficiente</th><td>{{ resultado.metricas.produtos_historico_insuficiente }}</td></tr>
-                            <tr><th scope="row">Produtos inelegíveis</th><td>{{ resultado.metricas.produtos_inelegiveis }}</td><th scope="row">Linhas Venda processadas</th><td>{{ resultado.metricas.linhas_venda }}</td></tr>
-                            <tr><th scope="row">Anomalias do modelo</th><td>{{ resultado.metricas.outliers }}{% if resultado.metricas.outliers_percentual is not none %} ({{ resultado.metricas.outliers_percentual }}%){% endif %}</td><th scope="row">Aumentos atípicos</th><td>{{ resultado.metricas.aumentos_atipicos }}{% if resultado.metricas.aumentos_percentual is not none %} ({{ resultado.metricas.aumentos_percentual }}%){% endif %}</td></tr>
-                        </tbody>
-                    </table></div>
+                    <div class="summary-flow" aria-label="Etapas da análise">
+                        <section class="summary-step" aria-labelledby="resumo-universo">
+                            <h4 id="resumo-universo" class="summary-step-title"><span class="summary-step-number">1</span>Universo inicial</h4>
+                            <div class="summary-metrics summary-metrics-two">
+                                <article class="summary-metric summary-metric-primary"><span>Produtos encontrados</span><strong>{{ resultado.metricas.produtos_encontrados }}</strong></article>
+                                <article class="summary-metric"><span>Linhas de venda processadas</span><strong>{{ resultado.metricas.linhas_venda }}</strong></article>
+                            </div>
+                        </section>
+
+                        <section class="summary-step" aria-labelledby="resumo-selecao">
+                            <h4 id="resumo-selecao" class="summary-step-title"><span class="summary-step-number">2</span>Seleção dos medicamentos</h4>
+                            <div class="summary-metrics summary-metrics-three">
+                                <article class="summary-metric"><span>Elegíveis antes das exclusões</span><strong>{{ resultado.metricas.produtos_elegiveis_antes }}</strong></article>
+                                <article class="summary-metric"><span>Uso contínuo excluído</span><strong>{{ resultado.metricas.produtos_uso_continuo_excluidos }}</strong><small>Tipos 36, 44 e 56</small></article>
+                                <article class="summary-metric"><span>Antimicrobianos excluídos</span><strong>{{ resultado.metricas.produtos_antimicrobianos_excluidos }}</strong><small>Tipos 15 e 102</small></article>
+                                <article class="summary-metric summary-metric-primary"><span>Produtos elegíveis finais</span><strong>{{ resultado.metricas.produtos_elegiveis }}</strong><small>Produtos que seguem para a construção das chaves analíticas.</small></article>
+                                <article class="summary-metric"><span>Produtos inelegíveis</span><strong>{{ resultado.metricas.produtos_inelegiveis }}</strong></article>
+                            </div>
+                        </section>
+
+                        <section class="summary-step" aria-labelledby="resumo-chaves">
+                            <h4 id="resumo-chaves" class="summary-step-title"><span class="summary-step-number">3</span>Construção das chaves analíticas</h4>
+                            <p class="summary-flow-statement">A partir dos <strong>{{ resultado.metricas.produtos_elegiveis }} produtos elegíveis finais</strong>, foram formadas <strong class="summary-key-total">{{ resultado.metricas.chaves_analiticas }} chaves analíticas</strong>.</p>
+                            <p class="summary-step-note mb-0">Produtos com DCB podem ser consolidados em uma única chave analítica.</p>
+                        </section>
+
+                        <section class="summary-step" aria-labelledby="resumo-modelagem">
+                            <h4 id="resumo-modelagem" class="summary-step-title"><span class="summary-step-number">4</span>Capacidade de modelagem</h4>
+                            <div class="summary-metrics summary-metrics-two">
+                                <article class="summary-metric summary-metric-primary"><span>Chaves modeláveis</span><strong>{{ resultado.metricas.chaves_modelaveis }}</strong><small>Possuem histórico mínimo de 7 dias anteriores com vendas positivas.</small></article>
+                                <article class="summary-metric"><span>Chaves com histórico insuficiente</span><strong>{{ resultado.metricas.chaves_historico_insuficiente }}</strong><small>Não atingiram o histórico mínimo necessário para entrar no modelo.</small></article>
+                                <article class="summary-metric"><span>Produtos representados em chaves modeláveis</span><strong>{{ resultado.metricas.produtos_modelaveis }}</strong></article>
+                                <article class="summary-metric"><span>Produtos com histórico insuficiente</span><strong>{{ resultado.metricas.produtos_historico_insuficiente }}</strong></article>
+                            </div>
+                        </section>
+
+                        <section class="summary-step summary-step-last" aria-labelledby="resumo-resultado">
+                            <h4 id="resumo-resultado" class="summary-step-title"><span class="summary-step-number">5</span>Resultado do modelo</h4>
+                            <div class="summary-metrics summary-metrics-three">
+                                <article class="summary-metric summary-metric-primary"><span>Observações modeláveis</span><strong>{{ resultado.metricas.observacoes_avaliadas }}</strong></article>
+                                <article class="summary-metric"><span>Anomalias do modelo</span><strong>{{ resultado.metricas.outliers }}{% if resultado.metricas.outliers_percentual is not none %} <small>({{ resultado.metricas.outliers_percentual }}%)</small>{% endif %}</strong><small>Observações classificadas como anômalas pelo Isolation Forest.</small></article>
+                                <article class="summary-metric summary-metric-alert"><span>Aumentos atípicos</span><strong>{{ resultado.metricas.aumentos_atipicos }}{% if resultado.metricas.aumentos_percentual is not none %} <small>({{ resultado.metricas.aumentos_percentual }}%)</small>{% endif %}</strong><small>Anomalias cuja quantidade atual ficou acima da média histórica positiva anterior.</small></article>
+                            </div>
+                        </section>
+                    </div>
                     <h3 class="h6">Outras visualizações</h3>
                     <div class="row g-4">
                         <div class="col-12 col-xl-8"><h4 class="h6">Unidades vendidas por dia</h4><div class="app-chart app-chart-secondary"><canvas id="grafico-vendas-independentes" role="img" aria-label="Unidades vendidas por dia no arquivo selecionado"></canvas></div></div>
@@ -207,6 +237,6 @@
         });
     </script>
     {% endif %}
-    <script src="{{ url_for('static', filename='js/nova_analise.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/nova_analise.js', v='ordenacao-unica-20261013') }}"></script>
 </body>
 </html>

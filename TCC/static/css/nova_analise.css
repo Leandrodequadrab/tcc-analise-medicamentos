@@ -63,6 +63,71 @@
     background: #f7f8fa;
     line-height: 1.65;
 }
+.nova-analise-page .summary-flow { display: grid; gap: 1.55rem; margin: 1rem 0 2rem; }
+.nova-analise-page .summary-step {
+    position: relative;
+    padding: 1rem;
+    border: 1px solid var(--app-border);
+    border-radius: 12px;
+    background: #fbfcfd;
+}
+.nova-analise-page .summary-step:not(.summary-step-last)::after {
+    position: absolute;
+    right: 0;
+    bottom: -1.45rem;
+    left: 0;
+    color: #8da4b8;
+    content: "↓";
+    font-size: 1.2rem;
+    line-height: 1;
+    text-align: center;
+}
+.nova-analise-page .summary-step-title {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    margin: 0 0 .9rem;
+    color: #34485b;
+    font-size: 1rem;
+    font-weight: 650;
+}
+.nova-analise-page .summary-step-number {
+    display: inline-grid;
+    width: 1.7rem;
+    height: 1.7rem;
+    flex: 0 0 1.7rem;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--app-primary-soft);
+    color: var(--app-primary);
+    font-size: .85rem;
+    font-weight: 700;
+}
+.nova-analise-page .summary-metrics { display: grid; gap: .65rem; }
+.nova-analise-page .summary-metrics-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.nova-analise-page .summary-metrics-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.nova-analise-page .summary-metric {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: .22rem;
+    padding: .75rem .85rem;
+    border: 1px solid #e8edf1;
+    border-radius: 9px;
+    background: #fff;
+}
+.nova-analise-page .summary-metric > span { color: #586979; font-size: .82rem; }
+.nova-analise-page .summary-metric > strong { color: #34485b; font-size: 1.15rem; line-height: 1.3; }
+.nova-analise-page .summary-metric > strong small { color: inherit; font-size: .82rem; font-weight: 600; }
+.nova-analise-page .summary-metric > small,
+.nova-analise-page .summary-step-note { color: var(--app-muted); font-size: .75rem; line-height: 1.45; }
+.nova-analise-page .summary-metric-primary { border-top: 2px solid var(--app-primary); }
+.nova-analise-page .summary-metric-primary > strong,
+.nova-analise-page .summary-key-total { color: var(--app-primary); }
+.nova-analise-page .summary-metric-alert { border-top: 2px solid #c94048; }
+.nova-analise-page .summary-metric-alert > strong { color: #b8323b; }
+.nova-analise-page .summary-flow-statement { margin: 0 0 .35rem; color: #435262; line-height: 1.6; }
+.nova-analise-page .summary-key-total { white-space: nowrap; }
 .nova-analise-page .app-processing.loading-overlay {
     position: fixed;
     z-index: 2000;
@@ -91,12 +156,37 @@
 @media (max-width: 991.98px) {
     .nova-analise-page #filtros-aumentos > div { min-width: 0; }
     .nova-analise-page .product-name { min-width: 165px; }
+    .nova-analise-page .summary-metrics-three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 575.98px) {
     .nova-analise-page main.container { padding-top: 1.4rem !important; }
     .nova-analise-page .app-chart { height: 290px; }
     .nova-analise-page .table-responsive { overflow-x: auto; }
+    .nova-analise-page .summary-step { padding: .8rem; }
+    .nova-analise-page .summary-metrics-two,
+    .nova-analise-page .summary-metrics-three { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
     .nova-analise-page #mensagem-processamento { transition: none; }
+}
+.table-sort-control {
+    padding: 0;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.table-sort-control:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+}
+
+.table-sort-indicator {
+    display: inline-block;
+    min-width: 1em;
+    margin-inline-start: 0.15rem;
+    opacity: 0.65;
 }
