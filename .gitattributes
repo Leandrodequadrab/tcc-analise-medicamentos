@@ -1,0 +1,2 @@
+# Preserve vendor asset line endings and their integrity hashes on Windows.
+TCC/static/vendor/** text eol=lf
