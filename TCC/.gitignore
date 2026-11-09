@@ -9,6 +9,7 @@ __pycache__/
 
 # Variáveis de ambiente / senhas
 .env
+.env.demonstracao
 
 # VS Code
 .vscode/

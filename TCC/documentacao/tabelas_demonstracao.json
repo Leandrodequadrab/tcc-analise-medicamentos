@@ -1,0 +1,665 @@
+{
+  "banco": "tcc_medicamentos",
+  "postgresql": "18.6",
+  "tabelas": [
+    {
+      "tabela": "cadastro_produtos_farmacia",
+      "colunas": [
+        {
+          "nome": "cod_rede",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": true,
+          "padrao_banco": null
+        },
+        {
+          "nome": "cod_reduzido",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": true,
+          "padrao_banco": null
+        },
+        {
+          "nome": "cod_tipo",
+          "tipo": "INTEGER",
+          "aceita_nulo": true,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "nom_tipo",
+          "tipo": "VARCHAR(100)",
+          "aceita_nulo": true,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "nom_produto",
+          "tipo": "VARCHAR(255)",
+          "aceita_nulo": true,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "flg_ativo",
+          "tipo": "VARCHAR(1)",
+          "aceita_nulo": true,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "flg_excluir",
+          "tipo": "VARCHAR(1)",
+          "aceita_nulo": true,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "origem",
+          "tipo": "VARCHAR(100)",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "sincronizado_em",
+          "tipo": "TIMESTAMP WITH TIME ZONE",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": "now()"
+        }
+      ],
+      "chave_primaria": [
+        "cod_rede",
+        "cod_reduzido"
+      ],
+      "relacionamentos": [],
+      "dados_demonstrativos": 120
+    },
+    {
+      "tabela": "importacoes_rel0024",
+      "colunas": [
+        {
+          "nome": "id",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": true,
+          "padrao_banco": null
+        },
+        {
+          "nome": "hash_sha256",
+          "tipo": "VARCHAR(64)",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "nome_arquivo",
+          "tipo": "VARCHAR(255)",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "importado_em",
+          "tipo": "TIMESTAMP WITH TIME ZONE",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": "now()"
+        },
+        {
+          "nome": "periodo_inicial",
+          "tipo": "DATE",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "periodo_final",
+          "tipo": "DATE",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "filial",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "quantidade_vendas",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "quantidade_itens_arquivo",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "quantidade_itens_inseridos",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "quantidade_produtos",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "soma_quantidades",
+          "tipo": "NUMERIC(16, 4)",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "soma_valores",
+          "tipo": "NUMERIC(18, 2)",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "registros_invalidos",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "quantidade_linhas_lidas",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": "0"
+        },
+        {
+          "nome": "quantidade_linhas_nao_venda",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": "0"
+        },
+        {
+          "nome": "quantidade_linhas_venda",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": "0"
+        },
+        {
+          "nome": "quantidade_linhas_devolucao",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": "0"
+        },
+        {
+          "nome": "soma_quantidades_devolucao",
+          "tipo": "NUMERIC(16, 4)",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": "0"
+        },
+        {
+          "nome": "soma_valores_devolucao",
+          "tipo": "NUMERIC(18, 2)",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": "0"
+        },
+        {
+          "nome": "soma_quantidades_liquida",
+          "tipo": "NUMERIC(16, 4)",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": "0"
+        },
+        {
+          "nome": "soma_valores_liquido",
+          "tipo": "NUMERIC(18, 2)",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": "0"
+        },
+        {
+          "nome": "produtos_inseridos",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": "0"
+        },
+        {
+          "nome": "produtos_existentes",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": "0"
+        },
+        {
+          "nome": "vendas_inseridas",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": "0"
+        },
+        {
+          "nome": "vendas_existentes",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": "0"
+        },
+        {
+          "nome": "itens_existentes",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": "0"
+        },
+        {
+          "nome": "soma_quantidades_inseridas",
+          "tipo": "NUMERIC(16, 4)",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": "0"
+        },
+        {
+          "nome": "quantidade_conflitos",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": "0"
+        },
+        {
+          "nome": "quantidade_divergencias_descricao",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": "0"
+        },
+        {
+          "nome": "tempo_processamento_segundos",
+          "tipo": "NUMERIC(12, 3)",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": "0"
+        }
+      ],
+      "chave_primaria": [
+        "id"
+      ],
+      "relacionamentos": [],
+      "dados_demonstrativos": 0
+    },
+    {
+      "tabela": "produtos_rel0024",
+      "colunas": [
+        {
+          "nome": "id",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": true,
+          "padrao_banco": null
+        },
+        {
+          "nome": "filial",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "codigo_produto",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "descricao_original",
+          "tipo": "VARCHAR(255)",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "cod_tipo",
+          "tipo": "INTEGER",
+          "aceita_nulo": true,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "nom_tipo",
+          "tipo": "VARCHAR(100)",
+          "aceita_nulo": true,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "origem_classificacao",
+          "tipo": "VARCHAR(100)",
+          "aceita_nulo": true,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "classificacao_operacional",
+          "tipo": "VARCHAR(40)",
+          "aceita_nulo": true,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "elegivel_analise_automedicacao",
+          "tipo": "BOOLEAN",
+          "aceita_nulo": true,
+          "chave_primaria": false,
+          "padrao_banco": null
+        }
+      ],
+      "chave_primaria": [
+        "id"
+      ],
+      "relacionamentos": [],
+      "dados_demonstrativos": 0
+    },
+    {
+      "tabela": "vendas",
+      "colunas": [
+        {
+          "nome": "id",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": true,
+          "padrao_banco": null
+        },
+        {
+          "nome": "data",
+          "tipo": "DATE",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "medicamento",
+          "tipo": "VARCHAR(150)",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "categoria",
+          "tipo": "VARCHAR(100)",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "quantidade",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "cidade",
+          "tipo": "VARCHAR(100)",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "prescricao",
+          "tipo": "BOOLEAN",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        }
+      ],
+      "chave_primaria": [
+        "id"
+      ],
+      "relacionamentos": [],
+      "dados_demonstrativos": 0
+    },
+    {
+      "tabela": "vendas_rel0024",
+      "colunas": [
+        {
+          "nome": "id",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": true,
+          "padrao_banco": null
+        },
+        {
+          "nome": "filial",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "numero_venda",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "data",
+          "tipo": "DATE",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "hora_original",
+          "tipo": "VARCHAR(30)",
+          "aceita_nulo": true,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "tipo_original",
+          "tipo": "VARCHAR(30)",
+          "aceita_nulo": true,
+          "chave_primaria": false,
+          "padrao_banco": null
+        }
+      ],
+      "chave_primaria": [
+        "id"
+      ],
+      "relacionamentos": [],
+      "dados_demonstrativos": 0
+    },
+    {
+      "tabela": "divergencias_descricao_rel0024",
+      "colunas": [
+        {
+          "nome": "id",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": true,
+          "padrao_banco": null
+        },
+        {
+          "nome": "importacao_id",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "filial",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "codigo_produto",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "descricao_banco",
+          "tipo": "VARCHAR(255)",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "descricao_arquivo",
+          "tipo": "VARCHAR(255)",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "registrada_em",
+          "tipo": "TIMESTAMP WITH TIME ZONE",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": "now()"
+        }
+      ],
+      "chave_primaria": [
+        "id"
+      ],
+      "relacionamentos": [
+        {
+          "coluna": "importacao_id",
+          "referencia": "importacoes_rel0024.id"
+        }
+      ],
+      "dados_demonstrativos": 0
+    },
+    {
+      "tabela": "itens_rel0024",
+      "colunas": [
+        {
+          "nome": "id",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": true,
+          "padrao_banco": null
+        },
+        {
+          "nome": "venda_id",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "produto_id",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "importacao_id",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "ocorrencia_produto",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "quantidade",
+          "tipo": "NUMERIC(14, 4)",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "valor_unitario",
+          "tipo": "NUMERIC(16, 4)",
+          "aceita_nulo": true,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "percentual_desconto",
+          "tipo": "NUMERIC(9, 4)",
+          "aceita_nulo": true,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "valor_desconto",
+          "tipo": "NUMERIC(16, 4)",
+          "aceita_nulo": true,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "valor_acrescimo",
+          "tipo": "NUMERIC(16, 4)",
+          "aceita_nulo": true,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "valor_total",
+          "tipo": "NUMERIC(16, 4)",
+          "aceita_nulo": true,
+          "chave_primaria": false,
+          "padrao_banco": null
+        },
+        {
+          "nome": "linha_relatorio",
+          "tipo": "INTEGER",
+          "aceita_nulo": false,
+          "chave_primaria": false,
+          "padrao_banco": null
+        }
+      ],
+      "chave_primaria": [
+        "id"
+      ],
+      "relacionamentos": [
+        {
+          "coluna": "importacao_id",
+          "referencia": "importacoes_rel0024.id"
+        },
+        {
+          "coluna": "venda_id",
+          "referencia": "vendas_rel0024.id"
+        },
+        {
+          "coluna": "produto_id",
+          "referencia": "produtos_rel0024.id"
+        }
+      ],
+      "dados_demonstrativos": 0
+    }
+  ],
+  "carregamento": "preparar_banco.py restaura o backup de banco/demonstracao em uma instancia nova; este JSON documenta a estrutura e nao executa SQL.",
+  "csv": "dados/demonstracao/cadastro_dcb_farmacia.csv",
+  "observacao": "As vendas analisadas em /nova-analise vem do arquivo enviado e nao sao persistidas."
+}

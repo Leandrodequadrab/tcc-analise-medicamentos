@@ -1,6 +1,7 @@
 """Constrói chaves analíticas híbridas sem alterar vendas ou dados de origem."""
 
 from pathlib import Path
+import os
 import re
 
 import pandas as pd
@@ -37,7 +38,11 @@ def normalizar_nome_dcb(valor):
 def carregar_cadastro_dcb(caminho=None):
     """Lê o CSV local sem modificar o arquivo ou acessar o banco da farmácia."""
 
-    origem = Path(caminho) if caminho is not None else CAMINHO_CADASTRO_DCB
+    origem = Path(caminho) if caminho is not None else Path(
+        os.environ.get("TCC_CADASTRO_DCB", CAMINHO_CADASTRO_DCB)
+    )
+    if not origem.is_absolute():
+        origem = Path(__file__).resolve().parents[1] / origem
     cadastro = pd.read_csv(
         origem,
         sep=";",

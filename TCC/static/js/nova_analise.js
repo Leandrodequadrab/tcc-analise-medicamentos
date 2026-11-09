@@ -227,6 +227,10 @@ if (filtrosAumentos && corpoAumentos) {
         const { correspondentes, totalPaginas, inicio, linhasPagina } = resultado;
         const visiveis = new Set(linhasPagina);
 
+        correspondentes.forEach((linha) => {
+            corpoAumentos.appendChild(linha);
+        });
+
         linhasAumentos.forEach((linha) => {
             linha.hidden = !visiveis.has(linha);
         });
